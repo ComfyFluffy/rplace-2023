@@ -1,0 +1,19 @@
+[package]
+name = "rplace-2023"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+chrono = "0.4"
+flate2 = "1.0.28"
+bincode = { version = "2.0.0-rc.3", features = ["serde"] }
+snafu = "0.7.5"
+csv = "1.3.0"
+lazy_static = "1.4.0"
+rayon = "1.8.0"
+
+[profile.release]
+debug = true
