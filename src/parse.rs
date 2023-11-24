@@ -1,8 +1,9 @@
-use std::fs::File;
+use std::{fs::File, io::Write};
 
 use chrono::{DateTime, Utc};
 use csv::ReaderBuilder;
 use flate2::read::GzDecoder;
+use rayon::prelude::*;
 use serde::Deserialize;
 use snafu::{prelude::*, Whatever};
 
@@ -81,16 +82,38 @@ pub fn parse_and_write_to_bin(parent_dir: &str) {
     let mut gz_writer = flate2::write::GzEncoder::new(gz_writer, flate2::Compression::default());
     let bincode_config = bincode::config::standard();
 
-    for index in 0..=52 {
-        let path = format!("{parent_dir}/2023_place_canvas_history-{index:012}.csv.gzip");
-        println!("Reading {}", path);
-        let reader = GzippedCsvPixelDataReader::new(first_pixel_time, &path).unwrap();
-        for pixel_data in reader {
-            let pixel_data = pixel_data.unwrap();
+    // for index in 0..=52 {
+    //     let path = format!("{parent_dir}/2023_place_canvas_history-{index:012}.csv.gzip");
+    //     println!("Reading {}", path);
+    //     let reader = GzippedCsvPixelDataReader::new(first_pixel_time, &path).unwrap();
+    //     for pixel_data in reader {
+    //         let pixel_data = pixel_data.unwrap();
 
-            bincode::encode_into_std_write(&pixel_data, &mut gz_writer, bincode_config).unwrap();
-        }
-    }
+    //         bincode::encode_into_std_write(&pixel_data, &mut gz_writer, bincode_config).unwrap();
+    //     }
+    // }
+
+    // Parrallel version
+    let data: Vec<u8> = (0..=52)
+        .into_par_iter()
+        .map(|index| {
+            let path = format!("{parent_dir}/2023_place_canvas_history-{index:012}.csv.gzip");
+            println!("Reading {}", path);
+            let reader = GzippedCsvPixelDataReader::new(first_pixel_time, &path).unwrap();
+
+            let mut data = vec![];
+            for pixel_data in reader {
+                let pixel_data = pixel_data.unwrap();
+
+                let current = bincode::encode_to_vec(&pixel_data, bincode_config).unwrap();
+                data.extend(current);
+            }
+            data
+        })
+        .flatten()
+        .collect();
+
+    gz_writer.write_all(&data).unwrap();
 }
 
 pub fn parse_bin() -> Result<Vec<PixelData>, Whatever> {
