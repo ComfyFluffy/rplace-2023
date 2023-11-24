@@ -79,7 +79,7 @@ pub fn parse_and_write_to_bin(parent_dir: &str) {
         .unwrap()
         .with_timezone(&Utc);
     let gz_writer = File::create("pixels.bin").unwrap();
-    let mut gz_writer = flate2::write::GzEncoder::new(gz_writer, flate2::Compression::default());
+    let mut gz_writer = flate2::write::GzEncoder::new(gz_writer, flate2::Compression::fast());
     let bincode_config = bincode::config::standard();
 
     // for index in 0..=52 {
