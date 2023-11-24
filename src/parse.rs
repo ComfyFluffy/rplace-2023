@@ -102,7 +102,7 @@ pub fn parse_and_write_to_bin(parent_dir: &str) {
             let reader = GzippedCsvPixelDataReader::new(first_pixel_time, &path).unwrap();
 
             // Allocate a vector with a capacity of 32 MiB
-            let mut data = vec![0; 32 * 1024 * 1024];
+            let mut data = Vec::with_capacity(32 * 1024 * 1024);
             for pixel_data in reader {
                 let pixel_data = pixel_data.unwrap();
 
