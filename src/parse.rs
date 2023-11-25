@@ -117,28 +117,35 @@ pub fn parse_and_write_to_bin(parent_dir: &str) {
     gz_writer.write_all(&data).unwrap();
 }
 
-pub fn parse_bin() -> Result<Vec<PixelData>, Whatever> {
-    let results = vec![];
-    let gz_reader = File::open("pixels.bin").unwrap();
-    let mut gz_reader = flate2::read::GzDecoder::new(gz_reader);
-    let bincode_config = bincode::config::standard();
-    loop {
-        match bincode::decode_from_std_read::<PixelData, _, _>(&mut gz_reader, bincode_config) {
-            Ok(pixel_data) => {
-                // println!("{:?}", pixel_data);
-            }
+pub struct GzippedBinPixelDataReader {
+    reader: flate2::read::GzDecoder<File>,
+}
+
+impl GzippedBinPixelDataReader {
+    pub fn new(path: &str) -> Result<Self, Whatever> {
+        let file = File::open(path).whatever_context("Failed to open file")?;
+        let reader = flate2::read::GzDecoder::new(file);
+        Ok(Self { reader })
+    }
+}
+
+impl Iterator for GzippedBinPixelDataReader {
+    type Item = Result<PixelData, Whatever>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match bincode::decode_from_std_read(&mut self.reader, bincode::config::standard()) {
+            Ok(pixel_data) => Some(Ok(pixel_data)),
             Err(e) => {
                 match &e {
                     bincode::error::DecodeError::Io { inner, .. } => {
                         if inner.kind() == std::io::ErrorKind::UnexpectedEof {
-                            break;
+                            return None;
                         }
                     }
                     _ => {}
                 };
-                whatever!("Failed to decode: {}", e)
+                Some(Err(e).whatever_context("Failed to parse record"))
             }
         }
     }
-    Ok(results)
 }

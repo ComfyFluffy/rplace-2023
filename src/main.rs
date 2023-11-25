@@ -1,9 +1,10 @@
-use parse::{parse_and_write_to_bin, parse_bin};
+use std::collections::BTreeMap;
 
-mod data;
-mod parse;
+use rplace_2023::get_max_min_coord;
 
+// mod renderer;
 fn main() {
-    parse_and_write_to_bin("/Users/i/Downloads/rplace/");
-    // parse_bin();
+    let instant = std::time::Instant::now();
+    get_max_min_coord();
+    println!("Time: {:?}", instant.elapsed());
 }
