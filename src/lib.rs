@@ -1,7 +1,16 @@
+use renderer::State;
+use winit::{
+    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    keyboard::{Key, NamedKey},
+    window::WindowBuilder,
+};
+
 use crate::{data::Coordinate, parse::GzippedBinPixelDataReader};
 
 mod data;
 mod parse;
+mod renderer;
 
 pub fn get_max_min_coord() {
     let iter = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
@@ -27,4 +36,47 @@ pub fn get_max_min_coord() {
         }
     }
     println!("min: {:?}, max: {:?}", min, max);
+}
+
+pub async fn run() {
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Wait);
+
+    let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    let mut state = State::new(window).await;
+
+    event_loop
+        .run(move |event, elwt| match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            state: ElementState::Pressed,
+                            logical_key: Key::Named(NamedKey::Escape),
+                            ..
+                        },
+                    ..
+                } => elwt.exit(),
+                WindowEvent::KeyboardInput { event, .. } => {
+                    // handle_key_event(&mut state, event);
+                }
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(physical_size);
+                }
+                _ => {}
+            },
+            Event::AboutToWait => {
+                match state.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                    Err(wgpu::SurfaceError::OutOfMemory) => panic!("Out of memory"),
+                    Err(e) => eprintln!("{:?}", e),
+                }
+                state.window().request_redraw();
+            }
+            _ => {}
+        })
+        .unwrap();
 }

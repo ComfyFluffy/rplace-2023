@@ -1,6 +1,10 @@
-use wgpu::util::DeviceExt;
 // lib.rs
-use winit::{event::WindowEvent, window::Window};
+use winit::window::Window;
+
+use self::{offscreen::OffscreenPipeline, presentation::PresentationPipeline};
+
+mod offscreen;
+mod presentation;
 
 pub struct State {
     surface: wgpu::Surface,
@@ -8,14 +12,13 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
-    // The window must be declared after the surface so
-    // it gets dropped after it as the surface contains
-    // unsafe references to the window's resources.
+
     window: Window,
 
-    render_pipeline: wgpu::RenderPipeline,
+    offscreen_pipeline: OffscreenPipeline,
+    presentation_pipeline: PresentationPipeline,
 
-    vertex_buffer: wgpu::Buffer,
+    last_frame_time: Option<std::time::Instant>,
 }
 
 impl State {
@@ -97,45 +100,24 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[],
+        // Create a 3000x2000 texture for offscreen rendering
+        let offscreen_pipeline = OffscreenPipeline::new(
+            &device,
+            &config,
+            wgpu::Extent3d {
+                width: 3000,
+                height: 2000,
+                depth_or_array_layers: 1,
             },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
+        );
+
+        let presentation_pipeline = PresentationPipeline::new(
+            &device,
+            &config,
+            size.width as f32 / size.height as f32,
+            3000.0 / 2000.0,
+            &offscreen_pipeline.view,
+        );
 
         Self {
             surface,
@@ -144,8 +126,9 @@ impl State {
             config,
             size,
             window,
-            render_pipeline,
-            vertex_buffer,
+            offscreen_pipeline,
+            presentation_pipeline,
+            last_frame_time: None,
         }
     }
 
@@ -159,52 +142,29 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+            self.presentation_pipeline.update_window_size(
+                &self.device,
+                self.size.width as f32 / self.size.height as f32,
+                3000.0 / 2000.0,
+            )
         }
     }
-
-    fn input(&mut self, event: &WindowEvent) -> bool {
-        false
-    }
-
-    pub fn update(&mut self) {}
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-
-            render_pass.draw(0..VERTICES.len() as u32, 0..1);
-        }
+        self.offscreen_pipeline.begin_render_pass(&mut encoder);
+        self.presentation_pipeline
+            .begin_render_pass(&mut encoder, &view);
 
         self.queue.submit(Some(encoder.finish()));
         output.present();
