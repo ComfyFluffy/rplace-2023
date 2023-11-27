@@ -1,3 +1,4 @@
+use log::{error, warn};
 use renderer::State;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -11,6 +12,8 @@ use crate::{data::Coordinate, parse::GzippedBinPixelDataReader};
 mod data;
 mod parse;
 mod renderer;
+
+pub use parse::parse_and_write_to_bin;
 
 pub fn get_max_min_coord() {
     let iter = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
@@ -45,6 +48,7 @@ pub async fn run() {
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
     let mut state = State::new(window).await;
+    let mut window_occluded = false;
 
     event_loop
         .run(move |event, elwt| match event {
@@ -59,22 +63,30 @@ pub async fn run() {
                         },
                     ..
                 } => elwt.exit(),
-                WindowEvent::KeyboardInput { event, .. } => {
-                    // handle_key_event(&mut state, event);
-                }
+                // WindowEvent::KeyboardInput { event, .. } => {
+                // handle_key_event(&mut state, event);
+                // }
                 WindowEvent::Resized(physical_size) => {
                     state.resize(physical_size);
+                }
+                WindowEvent::RedrawRequested => match state.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost) => {
+                        state.resize(state.size);
+                        warn!("Lost surface");
+                    }
+                    Err(wgpu::SurfaceError::OutOfMemory) => panic!("Out of memory"),
+                    Err(e) => error!("render error: {:?}", e),
+                },
+                WindowEvent::Occluded(occluded) => {
+                    window_occluded = occluded;
                 }
                 _ => {}
             },
             Event::AboutToWait => {
-                match state.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                    Err(wgpu::SurfaceError::OutOfMemory) => panic!("Out of memory"),
-                    Err(e) => eprintln!("{:?}", e),
+                if !window_occluded {
+                    state.window().request_redraw();
                 }
-                state.window().request_redraw();
             }
             _ => {}
         })

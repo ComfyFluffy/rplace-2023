@@ -1,8 +1,10 @@
+use log::info;
 // lib.rs
 use winit::window::Window;
 
 use self::{offscreen::OffscreenPipeline, presentation::PresentationPipeline};
 
+mod data;
 mod offscreen;
 mod presentation;
 
@@ -17,8 +19,7 @@ pub struct State {
 
     offscreen_pipeline: OffscreenPipeline,
     presentation_pipeline: PresentationPipeline,
-
-    last_frame_time: Option<std::time::Instant>,
+    // last_frame_time: Option<std::time::Instant>,
 }
 
 impl State {
@@ -28,10 +29,7 @@ impl State {
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
 
         // # Safety
         //
@@ -128,7 +126,7 @@ impl State {
             window,
             offscreen_pipeline,
             presentation_pipeline,
-            last_frame_time: None,
+            // last_frame_time: None,
         }
     }
 
@@ -138,6 +136,7 @@ impl State {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
+            info!("Resizing to {:?}", new_size);
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;

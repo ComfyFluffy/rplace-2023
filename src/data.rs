@@ -3,7 +3,7 @@ use std::str::FromStr;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode, Clone)]
 pub enum Coordinate {
     Simple { x: i16, y: i16 },
     Rectangle { x1: i16, y1: i16, x2: i16, y2: i16 },
