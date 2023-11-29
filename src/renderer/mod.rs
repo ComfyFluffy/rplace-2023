@@ -6,7 +6,7 @@ use self::{
     data::GpuPixelData, presentation::PresentationPipeline, update_texture::UpdateTexturePipeline,
 };
 
-mod data;
+pub mod data;
 mod presentation;
 mod update_texture;
 

@@ -10,14 +10,14 @@ pub enum Coordinate {
     Circle { x: i16, y: i16, radius: i16 },
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode, Clone)]
 pub struct PixelColor {
     pub r: u8,
     pub g: u8,
     pub b: u8,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode, Clone)]
 pub struct PixelData {
     pub miliseconds_since_first_pixel: u32,
     pub coordinate: Coordinate,

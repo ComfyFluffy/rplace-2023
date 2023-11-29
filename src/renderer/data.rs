@@ -5,18 +5,18 @@ use crate::data::Coordinate;
 #[repr(C)]
 #[derive(Debug, Pod, Zeroable, Clone, Copy)]
 pub struct GpuCoordinate {
-    pub tag: i32,
-    pub data: [i32; 4],
+    pub tag: u32,
+    pub data: [u32; 4],
 }
 
 impl From<Coordinate> for GpuCoordinate {
     fn from(coordinate: Coordinate) -> Self {
-        fn convert((x, y): (i16, i16)) -> (i32, i32) {
+        fn convert((x, y): (i16, i16)) -> (u32, u32) {
             // In Coordinate the origin is in the center of the image.
             // We need to convert it to the top left corner, flippping the y axis.
             // Coordinate: min: (-1500, -1000), max: (1499, 999)
             // GpuCoordinate: min: (0, 0), max: (2999, 1999)
-            (x as i32 + 1500, -y as i32 + 1000 - 1)
+            (x as u32 + 1500, -y as u32 + 1000 - 1)
         }
         match coordinate {
             Coordinate::Simple { x, y } => {
@@ -38,7 +38,7 @@ impl From<Coordinate> for GpuCoordinate {
                 let (x, y) = convert((x, y));
                 GpuCoordinate {
                     tag: 2,
-                    data: [x, y, radius as i32, 0],
+                    data: [x, y, radius as u32, 0],
                 }
             }
         }

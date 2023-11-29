@@ -1,4 +1,8 @@
+// use dotenvy::dotenv;
+
 fn main() {
+    env_logger::init();
+    // dotenv().ok();
     // let instant = std::time::Instant::now();
     // get_max_min_coord();
     // println!("Time: {:?}", instant.elapsed());

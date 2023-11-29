@@ -1,3 +1,5 @@
+use std::{mem::size_of, time::Instant};
+
 use log::{error, warn};
 use renderer::State;
 use winit::{
@@ -7,7 +9,7 @@ use winit::{
     window::WindowBuilder,
 };
 
-use crate::{data::Coordinate, parse::GzippedBinPixelDataReader};
+use crate::{data::Coordinate, parse::GzippedBinPixelDataReader, renderer::data::GpuPixelData};
 
 mod data;
 mod parse;
@@ -50,12 +52,13 @@ pub async fn run() {
     let mut state = State::new(window).await;
     let mut window_occluded = false;
 
-    let reader = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
-    let data: Vec<_> = reader
-        .map(|pixel_data| pixel_data.unwrap().into())
-        .take(65535)
-        .collect();
-    println!("data preview: {:?}", &data[0..10]);
+    let mut reader = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
+
+    let render_start = Instant::now();
+    let playback_speed = 10000;
+
+    let mut buffer = Vec::new();
+
     event_loop
         .run(move |event, elwt| match event {
             Event::WindowEvent { event, .. } => match event {
@@ -72,15 +75,39 @@ pub async fn run() {
                 WindowEvent::Resized(physical_size) => {
                     state.resize(physical_size);
                 }
-                WindowEvent::RedrawRequested => match state.render(data.as_slice()) {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => {
-                        state.resize(state.size);
-                        warn!("Lost surface");
+                WindowEvent::RedrawRequested => {
+                    let elapsed_ms = render_start.elapsed().as_millis() as u32 * playback_speed;
+
+                    for pixel_data in &mut reader {
+                        let pixel_data = pixel_data.unwrap();
+                        if pixel_data.miliseconds_since_first_pixel > elapsed_ms {
+                            buffer.push(pixel_data.into());
+                            break;
+                        }
+                        buffer.push(pixel_data.into());
                     }
-                    Err(wgpu::SurfaceError::OutOfMemory) => panic!("Out of memory"),
-                    Err(e) => error!("render error: {:?}", e),
-                },
+
+                    let data = buffer
+                        .drain(
+                            ..(buffer.len() / 256 * 256).min(
+                                // 128 MiB (max buffer size)
+                                128 * 1024 * 1024 / size_of::<GpuPixelData>(),
+                            ),
+                        )
+                        .collect::<Vec<_>>();
+
+                    println!("{}", data.len());
+
+                    match state.render(data.as_slice()) {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => {
+                            state.resize(state.size);
+                            warn!("Lost surface");
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory) => panic!("Out of memory"),
+                        Err(e) => error!("render error: {:?}", e),
+                    }
+                }
                 WindowEvent::Occluded(occluded) => {
                     window_occluded = occluded;
                 }

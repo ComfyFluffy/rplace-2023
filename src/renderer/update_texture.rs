@@ -37,8 +37,7 @@ impl UpdateTexturePipeline {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Update Texture Buffer"),
             mapped_at_creation: false,
-            // 100 MB for test
-            size: 100 * 1024 * 1024,
+            size: 128 * 1024 * 1024,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -85,6 +84,9 @@ impl UpdateTexturePipeline {
         encoder: &mut wgpu::CommandEncoder,
         data: &[GpuPixelData],
     ) {
+        if data.is_empty() {
+            return;
+        }
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(data));
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Update Texture Compute Pass"),
@@ -92,6 +94,6 @@ impl UpdateTexturePipeline {
         });
         compute_pass.set_pipeline(&self.compute_pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.dispatch_workgroups(data.len() as u32, 1, 1);
+        compute_pass.dispatch_workgroups((data.len() / 256) as u32, 1, 1);
     }
 }
