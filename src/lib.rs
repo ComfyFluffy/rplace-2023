@@ -43,6 +43,26 @@ pub fn get_max_min_coord() {
     println!("min: {:?}, max: {:?}", min, max);
 }
 
+pub fn print_quad_circle() {
+    let reader = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
+    for pixel_data in reader {
+        let pixel_data = pixel_data.unwrap();
+        match pixel_data.coordinate {
+            Coordinate::Circle { x, y, radius } => {
+                if radius > 10 {
+                    println!("Circle: {:?}, {:?}", x, y);
+                }
+            }
+            Coordinate::Rectangle { x1, y1, x2, y2 } => {
+                if x2 - x1 > 10 && y2 - y1 > 10 {
+                    println!("Rectangle: {:?}, {:?}, {:?}, {:?}", x1, y1, x2, y2);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Wait);
