@@ -8,7 +8,7 @@ use self::{
 
 pub mod data;
 mod presentation;
-mod update_texture;
+pub mod update_texture;
 
 pub struct State {
     surface: wgpu::Surface,
@@ -32,7 +32,10 @@ impl State {
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
 
         // # Safety
         //
@@ -125,8 +128,6 @@ impl State {
 
         let update_texture_pipeline = UpdateTexturePipeline::new(&device, &texture_view);
 
-        // let offscreen_pipeline = OffscreenPipeline::new(&device, &texture);
-
         let presentation_pipeline = PresentationPipeline::new(
             &device,
             &config,
@@ -143,9 +144,7 @@ impl State {
             size,
             window,
             update_texture_pipeline,
-            // offscreen_pipeline,
             presentation_pipeline,
-            // last_frame_time: None,
         }
     }
 

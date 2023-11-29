@@ -1,5 +1,7 @@
 use super::data::GpuPixelData;
 
+pub const WORKGROUP_SIZE: u32 = 256;
+
 pub struct UpdateTexturePipeline {
     pub compute_pipeline: wgpu::ComputePipeline,
     pub bind_group: wgpu::BindGroup,
@@ -94,6 +96,6 @@ impl UpdateTexturePipeline {
         });
         compute_pass.set_pipeline(&self.compute_pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.dispatch_workgroups((data.len() / 256) as u32, 1, 1);
+        compute_pass.dispatch_workgroups(data.len() as u32 / WORKGROUP_SIZE, 1, 1);
     }
 }

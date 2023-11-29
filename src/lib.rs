@@ -1,7 +1,7 @@
 use std::{mem::size_of, time::Instant};
 
 use log::{error, warn};
-use renderer::State;
+use renderer::{update_texture::WORKGROUP_SIZE, State};
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -99,24 +99,26 @@ pub async fn run() {
                     let elapsed_ms = render_start.elapsed().as_millis() as u32 * playback_speed;
 
                     for pixel_data in &mut reader {
-                        let pixel_data = pixel_data.unwrap();
+                        let pixel_data: GpuPixelData = pixel_data.unwrap().into();
+                        // if pixel_data.coordinate.tag == 0 && pixel_data.coordinate.data[0] < 1000 {
+                        //     continue;
+                        // }
+                        buffer.push(pixel_data);
                         if pixel_data.miliseconds_since_first_pixel > elapsed_ms {
-                            buffer.push(pixel_data.into());
                             break;
                         }
-                        buffer.push(pixel_data.into());
                     }
 
                     let data = buffer
                         .drain(
-                            ..(buffer.len() / 256 * 256).min(
+                            ..(buffer.len() / WORKGROUP_SIZE as usize * WORKGROUP_SIZE as usize)
                                 // 128 MiB (max buffer size)
-                                128 * 1024 * 1024 / size_of::<GpuPixelData>(),
-                            ),
+                                .min(128 * 1024 * 1024 / size_of::<GpuPixelData>())
+                                .min(65535 * WORKGROUP_SIZE as usize),
                         )
                         .collect::<Vec<_>>();
 
-                    println!("{}", data.len());
+                    println!("{:?}", data.len());
 
                     match state.render(data.as_slice()) {
                         Ok(_) => {}

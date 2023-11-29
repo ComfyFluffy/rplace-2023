@@ -13,10 +13,10 @@ impl From<Coordinate> for GpuCoordinate {
     fn from(coordinate: Coordinate) -> Self {
         fn convert((x, y): (i16, i16)) -> (u32, u32) {
             // In Coordinate the origin is in the center of the image.
-            // We need to convert it to the top left corner, flippping the y axis.
+            // We need to convert it to the top left corner.
             // Coordinate: min: (-1500, -1000), max: (1499, 999)
             // GpuCoordinate: min: (0, 0), max: (2999, 1999)
-            (x as u32 + 1500, -y as u32 + 1000 - 1)
+            ((x + 1500) as u32, (y + 1000) as u32)
         }
         match coordinate {
             Coordinate::Simple { x, y } => {
