@@ -50,7 +50,7 @@ impl From<Coordinate> for GpuCoordinate {
 pub struct GpuPixelData {
     pub miliseconds_since_first_pixel: u32,
     pub coordinate: GpuCoordinate,
-    pub pixel_color: [f32; 3],
+    pub pixel_color: [u32; 3],
 }
 
 impl From<crate::data::PixelData> for GpuPixelData {
@@ -59,9 +59,9 @@ impl From<crate::data::PixelData> for GpuPixelData {
             miliseconds_since_first_pixel: pixel_data.miliseconds_since_first_pixel,
             coordinate: pixel_data.coordinate.into(),
             pixel_color: [
-                pixel_data.pixel_color.r as f32 / 255.0,
-                pixel_data.pixel_color.g as f32 / 255.0,
-                pixel_data.pixel_color.b as f32 / 255.0,
+                pixel_data.pixel_color.r as u32,
+                pixel_data.pixel_color.g as u32,
+                pixel_data.pixel_color.b as u32,
             ],
         }
     }

@@ -50,6 +50,12 @@ pub async fn run() {
     let mut state = State::new(window).await;
     let mut window_occluded = false;
 
+    let reader = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
+    let data: Vec<_> = reader
+        .map(|pixel_data| pixel_data.unwrap().into())
+        .take(65535)
+        .collect();
+    println!("data preview: {:?}", &data[0..10]);
     event_loop
         .run(move |event, elwt| match event {
             Event::WindowEvent { event, .. } => match event {
@@ -63,13 +69,10 @@ pub async fn run() {
                         },
                     ..
                 } => elwt.exit(),
-                // WindowEvent::KeyboardInput { event, .. } => {
-                // handle_key_event(&mut state, event);
-                // }
                 WindowEvent::Resized(physical_size) => {
                     state.resize(physical_size);
                 }
-                WindowEvent::RedrawRequested => match state.render() {
+                WindowEvent::RedrawRequested => match state.render(data.as_slice()) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost) => {
                         state.resize(state.size);

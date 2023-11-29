@@ -79,7 +79,7 @@ impl PresentationPipeline {
         config: &wgpu::SurfaceConfiguration,
         window_aspect_ratio: f32,
         texture_aspect_ratio: f32,
-        view: &wgpu::TextureView,
+        texture_view: &wgpu::TextureView,
     ) -> Self {
         let nearest_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Nearest,
@@ -119,7 +119,7 @@ impl PresentationPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(view),
+                    resource: wgpu::BindingResource::TextureView(texture_view),
                 },
             ],
         });

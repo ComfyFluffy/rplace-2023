@@ -1,12 +1,14 @@
 use log::info;
-// lib.rs
+use wgpu::TextureUsages;
 use winit::window::Window;
 
-use self::{offscreen::OffscreenPipeline, presentation::PresentationPipeline};
+use self::{
+    data::GpuPixelData, presentation::PresentationPipeline, update_texture::UpdateTexturePipeline,
+};
 
 mod data;
-mod offscreen;
 mod presentation;
+mod update_texture;
 
 pub struct State {
     surface: wgpu::Surface,
@@ -17,7 +19,8 @@ pub struct State {
 
     window: Window,
 
-    offscreen_pipeline: OffscreenPipeline,
+    update_texture_pipeline: UpdateTexturePipeline,
+    // offscreen_pipeline: OffscreenPipeline,
     presentation_pipeline: PresentationPipeline,
     // last_frame_time: Option<std::time::Instant>,
 }
@@ -98,23 +101,38 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        let texture_size = wgpu::Extent3d {
+            width: 3000,
+            height: 2000,
+            depth_or_array_layers: 1,
+        };
+
         // Create a 3000x2000 texture for offscreen rendering
-        let offscreen_pipeline = OffscreenPipeline::new(
-            &device,
-            &config,
-            wgpu::Extent3d {
-                width: 3000,
-                height: 2000,
-                depth_or_array_layers: 1,
-            },
-        );
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("rplace Texture"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let update_texture_pipeline = UpdateTexturePipeline::new(&device, &texture_view);
+
+        // let offscreen_pipeline = OffscreenPipeline::new(&device, &texture);
 
         let presentation_pipeline = PresentationPipeline::new(
             &device,
             &config,
             size.width as f32 / size.height as f32,
-            3000.0 / 2000.0,
-            &offscreen_pipeline.view,
+            texture_size.width as f32 / texture_size.height as f32,
+            &texture_view,
         );
 
         Self {
@@ -124,7 +142,8 @@ impl State {
             config,
             size,
             window,
-            offscreen_pipeline,
+            update_texture_pipeline,
+            // offscreen_pipeline,
             presentation_pipeline,
             // last_frame_time: None,
         }
@@ -149,7 +168,7 @@ impl State {
         }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, data: &[GpuPixelData]) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -161,7 +180,9 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
-        self.offscreen_pipeline.begin_render_pass(&mut encoder);
+        self.update_texture_pipeline
+            .begin_compute_pass(&self.queue, &mut encoder, data);
+        // self.offscreen_pipeline.begin_render_pass(&mut encoder);
         self.presentation_pipeline
             .begin_render_pass(&mut encoder, &view);
 
