@@ -118,13 +118,14 @@ pub fn parse_and_write_to_bin(parent_dir: &str) {
 }
 
 pub struct GzippedBinPixelDataReader {
-    reader: flate2::read::GzDecoder<File>,
+    reader: std::io::BufReader<flate2::read::GzDecoder<File>>,
 }
 
 impl GzippedBinPixelDataReader {
     pub fn new(path: &str) -> Result<Self, Whatever> {
         let file = File::open(path).whatever_context("Failed to open file")?;
         let reader = flate2::read::GzDecoder::new(file);
+        let reader = std::io::BufReader::new(reader);
         Ok(Self { reader })
     }
 }

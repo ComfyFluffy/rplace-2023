@@ -11,11 +11,9 @@ use winit::{
 
 use crate::{data::Coordinate, parse::GzippedBinPixelDataReader, renderer::data::GpuPixelData};
 
-mod data;
-mod parse;
+pub mod data;
+pub mod parse;
 mod renderer;
-
-pub use parse::parse_and_write_to_bin;
 
 pub fn get_max_min_coord() {
     let iter = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
@@ -100,7 +98,7 @@ pub async fn run() {
 
                     for pixel_data in &mut reader {
                         let pixel_data: GpuPixelData = pixel_data.unwrap().into();
-                        // if pixel_data.coordinate.tag == 0 && pixel_data.coordinate.data[0] < 1000 {
+                        // if pixel_data.coordinate.tag == 0 && pixel_data.coordinate.data[0] < 1500 {
                         //     continue;
                         // }
                         buffer.push(pixel_data);
@@ -118,7 +116,9 @@ pub async fn run() {
                         )
                         .collect::<Vec<_>>();
 
-                    println!("{:?}", data.len());
+                    if !data.is_empty() {
+                        println!("{:?}", data.len());
+                    }
 
                     match state.render(data.as_slice()) {
                         Ok(_) => {}

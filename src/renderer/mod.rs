@@ -181,7 +181,6 @@ impl State {
 
         self.update_texture_pipeline
             .begin_compute_pass(&self.queue, &mut encoder, data);
-        // self.offscreen_pipeline.begin_render_pass(&mut encoder);
         self.presentation_pipeline
             .begin_render_pass(&mut encoder, &view);
 
