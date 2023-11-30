@@ -1,3 +1,5 @@
+use wgpu::util::DeviceExt;
+
 use super::data::Std140GpuPixelData;
 
 pub const WORKGROUP_SIZE: u32 = 256;
@@ -5,11 +7,18 @@ pub const WORKGROUP_SIZE: u32 = 256;
 pub struct UpdateTexturePipeline {
     pub compute_pipeline: wgpu::ComputePipeline,
     pub bind_group: wgpu::BindGroup,
-    pub buffer: wgpu::Buffer,
+    pub pixel_updates_buffer: wgpu::Buffer,
+    pub atomic_buffer: wgpu::Buffer,
+    pub canvas_size: (u32, u32),
+    atomic_zeros: Vec<u32>,
 }
 
 impl UpdateTexturePipeline {
-    pub fn new(device: &wgpu::Device, texture_view: &wgpu::TextureView) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        texture_view: &wgpu::TextureView,
+        canvas_size: (u32, u32),
+    ) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Update Texture Bind Group Layout"),
             entries: &[
@@ -33,14 +42,48 @@ impl UpdateTexturePipeline {
                         view_dimension: wgpu::TextureViewDimension::D2,
                     },
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    count: None,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    },
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    count: None,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                },
             ],
         });
 
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        let pixel_updates_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Update Texture Buffer"),
             mapped_at_creation: false,
             size: 128 * 1024 * 1024,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let atomic_zeros = vec![0u32; canvas_size.0 as usize * canvas_size.1 as usize];
+
+        let atomic_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Update Texture Atomic Buffer"),
+            contents: bytemuck::cast_slice(atomic_zeros.as_slice()),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let canvas_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Canvas Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[canvas_size.0, canvas_size.1]),
+            usage: wgpu::BufferUsages::UNIFORM,
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -49,11 +92,19 @@ impl UpdateTexturePipeline {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: buffer.as_entire_binding(),
+                    resource: pixel_updates_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: atomic_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: canvas_uniform_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -76,7 +127,10 @@ impl UpdateTexturePipeline {
         Self {
             compute_pipeline,
             bind_group,
-            buffer,
+            pixel_updates_buffer,
+            atomic_buffer,
+            canvas_size,
+            atomic_zeros,
         }
     }
 
@@ -89,7 +143,14 @@ impl UpdateTexturePipeline {
         if data.is_empty() {
             return;
         }
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(data));
+        queue.write_buffer(&self.pixel_updates_buffer, 0, bytemuck::cast_slice(data));
+
+        // Clear atomic buffer
+        queue.write_buffer(
+            &self.atomic_buffer,
+            0,
+            bytemuck::cast_slice(self.atomic_zeros.as_slice()),
+        );
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Update Texture Compute Pass"),
             timestamp_writes: None,

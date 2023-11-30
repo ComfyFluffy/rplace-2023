@@ -127,7 +127,8 @@ impl State {
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let update_texture_pipeline = UpdateTexturePipeline::new(&device, &texture_view);
+        let update_texture_pipeline =
+            UpdateTexturePipeline::new(&device, &texture_view, (3000, 2000));
 
         let presentation_pipeline = PresentationPipeline::new(
             &device,
