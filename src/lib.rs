@@ -1,5 +1,6 @@
 use std::{mem::size_of, time::Instant};
 
+use crevice::std140::AsStd140;
 use log::{error, warn};
 use renderer::{update_texture::WORKGROUP_SIZE, State};
 use winit::{
@@ -101,7 +102,7 @@ pub async fn run() {
                         // if pixel_data.coordinate.tag == 0 && pixel_data.coordinate.data[0] < 1500 {
                         //     continue;
                         // }
-                        buffer.push(pixel_data);
+                        buffer.push(pixel_data.as_std140());
                         if pixel_data.miliseconds_since_first_pixel > elapsed_ms {
                             break;
                         }

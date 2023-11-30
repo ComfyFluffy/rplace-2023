@@ -1,4 +1,4 @@
-use super::data::GpuPixelData;
+use super::data::Std140GpuPixelData;
 
 pub const WORKGROUP_SIZE: u32 = 256;
 
@@ -84,7 +84,7 @@ impl UpdateTexturePipeline {
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        data: &[GpuPixelData],
+        data: &[Std140GpuPixelData],
     ) {
         if data.is_empty() {
             return;

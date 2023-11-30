@@ -1,13 +1,8 @@
-
-struct GpuCoordinate {
-    tag: u32,
-    data: vec4<u32>,
-}
-
 struct GpuPixelData {
     miliseconds_since_first_pixel: u32,
-    coordinate: GpuCoordinate,
-    pixel_color: vec3<u32>,
+    coordinate_tag: u32,
+    coordinate_data: vec4<u32>,
+    color: vec3<u32>,
 }
 
 @group(0) @binding(0) var<storage, read> pixel_updates: array<GpuPixelData>;
@@ -19,11 +14,15 @@ fn main(
     @builtin(global_invocation_id) id: vec3<u32>,
 ) {
     let pixel_data = pixel_updates[id.x];
-    switch (pixel_data.coordinate.tag) {
-        case 0u: {
+    switch (pixel_data.coordinate_tag) {
+        case 1u: {
             // Single pixel. Fill pixel_data.coordinate.data.xy.
-            textureStore(texture_out, pixel_data.coordinate.data.xy,
-                        vec4<f32>(vec3<f32>(pixel_data.pixel_color.xyz) / 255.0, 1.0)
+            textureStore(
+                texture_out,
+                vec2<u32>(pixel_data.coordinate_data.x, pixel_data.coordinate_data.y),
+                vec4<f32>(vec3<f32>(
+                    pixel_data.color.xyz
+                ) / 255.0, 1.0)
             );
         }
         // case 1u: {

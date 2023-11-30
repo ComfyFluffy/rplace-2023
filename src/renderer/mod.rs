@@ -3,7 +3,8 @@ use wgpu::TextureUsages;
 use winit::window::Window;
 
 use self::{
-    data::GpuPixelData, presentation::PresentationPipeline, update_texture::UpdateTexturePipeline,
+    data::Std140GpuPixelData, presentation::PresentationPipeline,
+    update_texture::UpdateTexturePipeline,
 };
 
 pub mod data;
@@ -167,7 +168,7 @@ impl State {
         }
     }
 
-    pub fn render(&mut self, data: &[GpuPixelData]) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, data: &[Std140GpuPixelData]) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
