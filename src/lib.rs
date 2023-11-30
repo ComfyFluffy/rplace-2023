@@ -2,7 +2,7 @@ use std::{mem::size_of, time::Instant};
 
 use crevice::std140::AsStd140;
 use log::{error, warn};
-use renderer::{update_texture::WORKGROUP_SIZE, State};
+use renderer::{data::Std140GpuPixelData, update_texture::WORKGROUP_SIZE, State};
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -99,9 +99,6 @@ pub async fn run() {
 
                     for pixel_data in &mut reader {
                         let pixel_data: GpuPixelData = pixel_data.unwrap().into();
-                        // if pixel_data.coordinate.tag == 0 && pixel_data.coordinate.data[0] < 1500 {
-                        //     continue;
-                        // }
                         buffer.push(pixel_data.as_std140());
                         if pixel_data.miliseconds_since_first_pixel > elapsed_ms {
                             break;
@@ -112,14 +109,10 @@ pub async fn run() {
                         .drain(
                             ..(buffer.len() / WORKGROUP_SIZE as usize * WORKGROUP_SIZE as usize)
                                 // 128 MiB (max buffer size)
-                                .min(128 * 1024 * 1024 / size_of::<GpuPixelData>())
+                                .min(128 * 1024 * 1024 / size_of::<Std140GpuPixelData>())
                                 .min(65535 * WORKGROUP_SIZE as usize),
                         )
                         .collect::<Vec<_>>();
-
-                    if !data.is_empty() {
-                        println!("{:?}", data.len());
-                    }
 
                     match state.render(data.as_slice()) {
                         Ok(_) => {}
