@@ -24,7 +24,7 @@ fn main(
             textureStore(
                 texture_out,
                 vec2<u32>(pixel_data.coordinate.data.x, pixel_data.coordinate.data.y),
-                vec4<f32>(1.0, 0.0, 0.0, 1.0)
+                vec4<f32>(vec3<f32>(pixel_data.color.xyz) / 255.0, 1.0)
             );
         }
         case 1u: {
@@ -35,7 +35,7 @@ fn main(
                                 vec4<f32>(vec3<f32>(pixel_data.color.xyz) / 255.0, 1.0)
                     );
                 }
-            } 
+            }
         }
         case 2u: {
             // Circle. Fill circle with center pixel_data.coordinate.data.xy and radius pixel_data.coordinate.data.z.
