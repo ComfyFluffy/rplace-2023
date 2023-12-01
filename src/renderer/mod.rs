@@ -71,8 +71,9 @@ impl State {
             .formats
             .iter()
             .copied()
-            .find(|f| f.is_srgb())
+            .find(|f| !f.is_srgb())
             .unwrap_or(surface_caps.formats[0]);
+        println!("surface_format: {:?}", surface_format);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
@@ -126,6 +127,8 @@ impl State {
         });
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        clear_texture_to_color(&device, &queue, &texture_view, wgpu::Color::WHITE);
 
         let update_texture_pipeline =
             UpdateTexturePipeline::new(&device, &texture_view, (3000, 2000));
@@ -191,4 +194,32 @@ impl State {
 
         Ok(())
     }
+}
+
+pub fn clear_texture_to_color(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture_view: &wgpu::TextureView,
+    color: wgpu::Color,
+) {
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Clear Texture Encoder"),
+    });
+    let render_pass_desc = wgpu::RenderPassDescriptor {
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(color),
+                store: wgpu::StoreOp::Store,
+            },
+            view: texture_view,
+        })],
+        depth_stencil_attachment: None,
+        label: Some("Clear Pass"),
+        occlusion_query_set: None,
+        timestamp_writes: None,
+    };
+
+    encoder.begin_render_pass(&render_pass_desc);
+    queue.submit(Some(encoder.finish()));
 }
