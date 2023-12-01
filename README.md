@@ -2,11 +2,16 @@
 
 r/place realtime player for 2023.
 
+Inspired by [Applying 5 million pixel updates per second with Rust & wgpu](https://maxisom.me/posts/applying-5-million-pixel-updates-per-second).
+
 ![Screenshot](<images/Screenshot 2023-12-01 at 10.42.37.png>)
+
+Compute shader is used to update the canvas, resulting in 10000x playback speed with ocassional frame drops.
+
+`bincode` & gz are used to compress and read the pixel updates data.
 
 ## Todos
 
-- [ ] Initial canvas should be cleared with white.
 - [ ] Color space correction.
 - [ ] Trialing data should be processed.
-- [ ] Play control.
+- [ ] Player control.
