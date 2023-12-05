@@ -28,6 +28,7 @@ fn vs_main(
 fn fs_main(
     in: VertexOutput,
 ) -> @location(0) vec4<f32> {
+    // let color = vec4<f32>(vec3<f32>(in.uv.x, in.uv.x, in.uv.x) * 3.0, 1.0);
     let color = textureSample(myTexture, mySampler, in.uv);
     return color;
 }
