@@ -1,0 +1,77 @@
+#version 460
+
+// Define struct equivalent to WGSL
+struct GpuCoordinate {
+    uint tag;
+    uvec4 data;
+};
+
+struct GpuPixelData {
+    uint miliseconds_since_first_pixel;
+    GpuCoordinate coordinate;
+    uvec3 color;
+};
+
+// Binding points in GLSL are set using layout(binding = index)
+layout(std430, binding = 0) buffer PixelUpdates {
+    GpuPixelData pixel_updates[];
+};
+
+layout(binding = 1, rgba8) writeonly uniform image2D texture_out;
+layout(std430, binding = 2) buffer LastIndex {
+    coherent atomic_uint last_index_for_coordinate[];
+};
+
+layout(binding = 3) uniform CanvasSize {
+    uvec2 canvas_size;
+};
+
+// Helper function for Quad
+void fillQuad(uint index, uvec2 start, uvec2 end, uvec3 color) {
+    for (uint x = start.x; x < end.x; ++x) {
+        for (uint y = start.y; y < end.y; ++y) {
+            store_pixel_to_texture(index, uvec2(x, y), color);
+        }
+    }
+}
+
+// Helper function for Circle
+void fillCircle(uint index, uvec2 center, uint radius, uvec3 color) {
+    for (uint x = center.x - radius; x < center.x + radius; ++x) {
+        for (uint y = center.y - radius; y < center.y + radius; ++y) {
+            if (pow(float(x - center.x), 2.0) + pow(float(y - center.y), 2.0) < pow(float(radius), 2.0)) {
+                store_pixel_to_texture(index, uvec2(x, y), color);
+            }
+        }
+    }
+}
+
+// Main store_pixel_to_texture function converted from WGSL
+void store_pixel_to_texture(uint index, uvec2 coordinate, uvec3 color) {
+    uint idx = atomicMax(last_index_for_coordinate[coordinate.x + coordinate.y * canvas_size.x], index);
+    if (idx > index) {
+        return; // This pixel has already been updated by a newer pixel.
+    }
+    imageStore(texture_out, ivec2(coordinate), vec4(vec3(color) / 255.0, 1.0));
+}
+
+// Main compute shader function
+layout(local_size_x = 256) in;
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    GpuPixelData pixel_data = pixel_updates[id];
+
+    switch (pixel_data.coordinate.tag) {
+        case 0u:
+            store_pixel_to_texture(id, pixel_data.coordinate.data.xy, pixel_data.color);
+            break;
+        case 1u:
+            fillQuad(id, pixel_data.coordinate.data.xy, pixel_data.coordinate.data.zw, pixel_data.color);
+            break;
+        case 2u:
+            fillCircle(id, pixel_data.coordinate.data.xy, pixel_data.coordinate.data.z, pixel_data.color);
+            break;
+        default:
+            break;
+    }
+}

@@ -1,35 +1,29 @@
-use std::mem::size_of;
+use std::{mem::size_of, sync::Arc};
 
-use wgpu::{util::DeviceExt, VertexAttribute};
+use vulkano::{
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
+    pipeline::graphics::vertex_input::Vertex,
+};
 
 pub struct PresentationPipeline {
     pub bind_group: wgpu::BindGroup,
     pub render_pipeline: wgpu::RenderPipeline,
-    pub vertex_buffer: wgpu::Buffer,
+    pub vertex_buffer: Subbuffer<[TextureVertex]>,
 }
 
+#[derive(BufferContents, Vertex)]
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
+struct TextureVertex {
+    #[format(R32G32_SFLOAT)]
     position: [f32; 2], // x, y
-    uv: [f32; 2],       // u, v
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRIBUTES: &[VertexAttribute] =
-            &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
-        wgpu::VertexBufferLayout {
-            array_stride: size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: ATTRIBUTES,
-        }
-    }
+    #[format(R32G32_SFLOAT)]
+    uv: [f32; 2], // u, v
 }
 
 impl PresentationPipeline {
-    fn fit_quad(window_aspect_ratio: f32, texture_aspect_ratio: f32) -> [Vertex; 4] {
-        let scale_x;
+    fn fit_quad(window_aspect_ratio: f32, texture_aspect_ratio: f32) -> [TextureVertex; 4] {
+        let scale_x: f32;
         let scale_y;
 
         if texture_aspect_ratio > window_aspect_ratio {
@@ -44,34 +38,46 @@ impl PresentationPipeline {
 
         [
             // Top left
-            Vertex {
+            TextureVertex {
                 position: [-scale_x, scale_y],
                 uv: [0.0, 0.0],
             },
             // Top right
-            Vertex {
+            TextureVertex {
                 position: [scale_x, scale_y],
                 uv: [1.0, 0.0],
             },
             // Bottom left
-            Vertex {
+            TextureVertex {
                 position: [-scale_x, -scale_y],
                 uv: [0.0, 1.0],
             },
             // Bottom right
-            Vertex {
+            TextureVertex {
                 position: [scale_x, -scale_y],
                 uv: [1.0, 1.0],
             },
         ]
     }
 
-    fn vertex_buffer_from_vertices(device: &wgpu::Device, vertices: &[Vertex]) -> wgpu::Buffer {
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Presentation Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        })
+    fn vertex_buffer_from_vertices(
+        memory_allocator: &Arc<StandardMemoryAllocator>,
+        vertices: impl Iterator<Item = TextureVertex> + ExactSizeIterator,
+    ) -> Subbuffer<[TextureVertex]> {
+        Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices,
+        )
+        .unwrap()
     }
 
     pub fn new(

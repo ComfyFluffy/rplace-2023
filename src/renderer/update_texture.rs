@@ -1,14 +1,17 @@
+use std::sync::Arc;
+
+use vulkano::{buffer::Subbuffer, pipeline::ComputePipeline};
 use wgpu::util::DeviceExt;
 
-use super::data::Std140GpuPixelData;
+use super::data::GpuPixelData;
 
 pub const WORKGROUP_SIZE: u32 = 256;
 
 pub struct UpdateTexturePipeline {
-    pub compute_pipeline: wgpu::ComputePipeline,
+    pub compute_pipeline: Arc<ComputePipeline>,
     pub bind_group: wgpu::BindGroup,
-    pub pixel_updates_buffer: wgpu::Buffer,
-    pub atomic_buffer: wgpu::Buffer,
+    pub pixel_updates_buffer: Subbuffer<[GpuPixelData]>,
+    pub atomic_buffer: Subbuffer<[u32]>,
     pub canvas_size: (u32, u32),
     atomic_zeros: Vec<u32>,
 }
@@ -158,5 +161,12 @@ impl UpdateTexturePipeline {
         compute_pass.set_pipeline(&self.compute_pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
         compute_pass.dispatch_workgroups(data.len() as u32 / WORKGROUP_SIZE, 1, 1);
+    }
+}
+
+mod cs {
+    vulkano::shader! {
+        ty: "compute",
+        path: "shaders/update_texture.comp"
     }
 }

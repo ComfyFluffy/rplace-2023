@@ -1,11 +1,12 @@
-use crevice::std140::{AsStd140, UVec3, UVec4};
+use vulkano::buffer::BufferContents;
 
 use crate::data::Coordinate;
 
-#[derive(Debug, AsStd140)]
+#[derive(Debug, BufferContents)]
+#[repr(C)]
 pub struct GpuCoordinate {
     pub tag: u32,
-    pub data: crevice::std140::UVec4,
+    pub data: [u32; 4],
 }
 
 impl From<Coordinate> for GpuCoordinate {
@@ -20,43 +21,28 @@ impl From<Coordinate> for GpuCoordinate {
         let (tag, data) = match value {
             Coordinate::Simple { x, y } => {
                 let (x, y) = convert((x, y));
-                (0, UVec4 { x, y, z: 0, w: 0 })
+                (0, [x, y, 0, 0])
             }
             Coordinate::Rectangle { x1, y1, x2, y2 } => {
                 let (x1, y1) = convert((x1, y1));
                 let (x2, y2) = convert((x2, y2));
-                (
-                    1,
-                    UVec4 {
-                        x: x1,
-                        y: y1,
-                        z: x2,
-                        w: y2,
-                    },
-                )
+                (1, [x1, y1, x2, y2])
             }
             Coordinate::Circle { x, y, radius } => {
                 let (x, y) = convert((x, y));
-                (
-                    2,
-                    UVec4 {
-                        x,
-                        y,
-                        z: radius as u32,
-                        w: 0,
-                    },
-                )
+                (2, [x, y, radius as u32, 0])
             }
         };
         GpuCoordinate { tag, data }
     }
 }
 
-#[derive(Debug, AsStd140)]
+#[derive(Debug, BufferContents)]
+#[repr(C)]
 pub struct GpuPixelData {
     pub miliseconds_since_first_pixel: u32,
     pub coordinate: GpuCoordinate,
-    pub color: crevice::std140::UVec3,
+    pub color: [u32; 3],
 }
 
 impl From<crate::data::PixelData> for GpuPixelData {
@@ -64,11 +50,7 @@ impl From<crate::data::PixelData> for GpuPixelData {
         GpuPixelData {
             miliseconds_since_first_pixel: pixel_data.miliseconds_since_first_pixel,
             coordinate: pixel_data.coordinate.into(),
-            color: UVec3 {
-                x: pixel_data.pixel_color.r as u32,
-                y: pixel_data.pixel_color.g as u32,
-                z: pixel_data.pixel_color.b as u32,
-            },
+            color: pixel_data.pixel_color.into(),
         }
     }
 }

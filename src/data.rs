@@ -17,6 +17,16 @@ pub struct PixelColor {
     pub b: u8,
 }
 
+impl From<PixelColor> for [u32; 3] {
+    fn from(pixel_color: PixelColor) -> Self {
+        [
+            pixel_color.r as u32,
+            pixel_color.g as u32,
+            pixel_color.b as u32,
+        ]
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Encode, Decode, Clone)]
 pub struct PixelData {
     pub miliseconds_since_first_pixel: u32,
