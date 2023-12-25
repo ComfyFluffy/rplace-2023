@@ -1,172 +1,284 @@
 use std::sync::Arc;
 
-use vulkano::{buffer::Subbuffer, pipeline::ComputePipeline};
-use wgpu::util::DeviceExt;
+use vulkano::{
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
+    command_buffer::{
+        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, ClearColorImageInfo,
+        CommandBufferUsage,
+    },
+    descriptor_set::{
+        allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
+    },
+    device::Queue,
+    format::{ClearColorValue, Format},
+    image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
+    pipeline::{
+        compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
+        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+        PipelineShaderStageCreateInfo,
+    },
+    sync::GpuFuture,
+};
 
-use super::data::GpuPixelData;
-
-pub const WORKGROUP_SIZE: u32 = 256;
+use super::App;
 
 pub struct UpdateTexturePipeline {
-    pub compute_pipeline: Arc<ComputePipeline>,
-    pub bind_group: wgpu::BindGroup,
-    pub pixel_updates_buffer: Subbuffer<[GpuPixelData]>,
-    pub atomic_buffer: Subbuffer<[u32]>,
-    pub canvas_size: (u32, u32),
-    atomic_zeros: Vec<u32>,
+    compute_queue: Arc<Queue>,
+    compute_pipeline: Arc<ComputePipeline>,
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+
+    pixel_updates_buffer: Subbuffer<[cs::PixelData]>,
+    atomic_buffer: Subbuffer<[i32]>,
+    canvas_image: Arc<ImageView>,
+
+    descriptor_set: Arc<PersistentDescriptorSet>,
+
+    should_clear_canvas: bool,
 }
 
 impl UpdateTexturePipeline {
-    pub fn new(
-        device: &wgpu::Device,
-        texture_view: &wgpu::TextureView,
-        canvas_size: (u32, u32),
-    ) -> Self {
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Update Texture Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    count: None,
-                    ty: wgpu::BindingType::Buffer {
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    },
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    count: None,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    count: None,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    },
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    count: None,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                },
-            ],
-        });
+    pub const MAX_PIXEL_UPDATES: u64 = 1024 * 1024 * 2;
+    pub const WORKGROUP_SIZE: u64 = 256;
 
-        let pixel_updates_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Update Texture Buffer"),
-            mapped_at_creation: false,
-            size: 128 * 1024 * 1024,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
+    pub fn new(app: &App, canvas_size: (u32, u32)) -> Self {
+        let allocator = app.context.memory_allocator();
+        let device = app.context.device();
+        let pixel_updates_buffer = Buffer::new_slice(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            Self::MAX_PIXEL_UPDATES,
+        )
+        .unwrap();
 
-        let atomic_zeros = vec![0u32; canvas_size.0 as usize * canvas_size.1 as usize];
+        let atomic_buffer = Buffer::from_iter(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            (0..canvas_size.0 * canvas_size.1).map(|_| 0),
+        )
+        .unwrap();
 
-        let atomic_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Update Texture Atomic Buffer"),
-            contents: bytemuck::cast_slice(atomic_zeros.as_slice()),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
+        let canvas_size_buffer = Buffer::from_data(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            cs::CanvasSize {
+                canvas_size: canvas_size.into(),
+            },
+        )
+        .unwrap();
 
-        let canvas_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Canvas Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[canvas_size.0, canvas_size.1]),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let compute_pipeline = {
+            let cs_main = cs::load(device.clone())
+                .unwrap()
+                .entry_point("main")
+                .unwrap();
+            let stage = PipelineShaderStageCreateInfo::new(cs_main);
+            let layout = PipelineLayout::new(
+                device.clone(),
+                PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                    .into_pipeline_layout_create_info(device.clone())
+                    .unwrap(),
+            )
+            .unwrap();
+            let pipeline = ComputePipeline::new(
+                device.clone(),
+                None,
+                ComputePipelineCreateInfo::stage_layout(stage, layout),
+            )
+            .unwrap();
+            pipeline
+        };
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Update Texture Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: pixel_updates_buffer.as_entire_binding(),
+        let canvas_image = ImageView::new_default(
+            Image::new(
+                allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::R8G8B8A8_UNORM,
+                    extent: [canvas_size.0, canvas_size.1, 1],
+                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED | ImageUsage::STORAGE,
+                    ..Default::default()
                 },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: atomic_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: canvas_uniform_buffer.as_entire_binding(),
-                },
-            ],
-        });
+                AllocationCreateInfo::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
 
-        let compute_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Update Texture Pipeline Layout"),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let command_buffer_allocator = app.command_buffer_allocator.clone();
+        let descriptor_set_allocator = app.descriptor_set_allocator.clone();
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Update Texture Pipeline"),
-            layout: Some(&compute_pipeline_layout),
-            module: &device
-                .create_shader_module(wgpu::include_wgsl!("shaders/update_texture.wgsl")),
-            entry_point: "main",
-        });
+        let descriptor_set = {
+            let desc_layout = compute_pipeline
+                .layout()
+                .set_layouts()
+                .get(0)
+                .unwrap()
+                .clone();
+            let descriptor_set = PersistentDescriptorSet::new(
+                &descriptor_set_allocator,
+                desc_layout,
+                [
+                    WriteDescriptorSet::buffer(0, pixel_updates_buffer.clone()),
+                    WriteDescriptorSet::image_view(1, canvas_image.clone()),
+                    WriteDescriptorSet::buffer(2, atomic_buffer.clone()),
+                    WriteDescriptorSet::buffer(3, canvas_size_buffer),
+                ],
+                [],
+            )
+            .unwrap();
+            descriptor_set
+        };
 
         Self {
+            compute_queue: app.context.compute_queue().clone(),
             compute_pipeline,
-            bind_group,
+            command_buffer_allocator,
+            descriptor_set_allocator,
             pixel_updates_buffer,
             atomic_buffer,
-            canvas_size,
-            atomic_zeros,
+            canvas_image,
+
+            descriptor_set,
+
+            should_clear_canvas: true,
         }
     }
 
-    pub fn begin_compute_pass(
-        &self,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        data: &[Std140GpuPixelData],
-    ) {
-        if data.is_empty() {
-            return;
-        }
-        queue.write_buffer(&self.pixel_updates_buffer, 0, bytemuck::cast_slice(data));
-
-        // Clear atomic buffer
-        queue.write_buffer(
-            &self.atomic_buffer,
-            0,
-            bytemuck::cast_slice(self.atomic_zeros.as_slice()),
+    pub fn compute(
+        &mut self,
+        before: Box<dyn GpuFuture>,
+        data: impl Iterator<Item = crate::data::PixelData> + ExactSizeIterator,
+    ) -> Box<dyn GpuFuture> {
+        let len = data.len() as u64;
+        assert!(
+            len % Self::WORKGROUP_SIZE == 0,
+            "length of data must be a multiple of workgroup size ({}), but is {}",
+            Self::WORKGROUP_SIZE,
+            len
         );
-        let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("Update Texture Compute Pass"),
-            timestamp_writes: None,
-        });
-        compute_pass.set_pipeline(&self.compute_pipeline);
-        compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.dispatch_workgroups(data.len() as u32 / WORKGROUP_SIZE, 1, 1);
+
+        {
+            let mut pixel_updates_buffer = self.pixel_updates_buffer.write().unwrap();
+            for (i, pixel_data) in data.enumerate() {
+                pixel_updates_buffer[i] = pixel_data.clone().into();
+            }
+        }
+
+        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.compute_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        if self.should_clear_canvas {
+            command_buffer_builder
+                .clear_color_image(ClearColorImageInfo {
+                    clear_value: ClearColorValue::Float([1.0, 1.0, 1.0, 1.0]),
+                    ..ClearColorImageInfo::image(self.canvas_image.image().clone())
+                })
+                .unwrap();
+            self.should_clear_canvas = false;
+        }
+
+        command_buffer_builder
+            .bind_pipeline_compute(self.compute_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                self.compute_pipeline.layout().clone(),
+                0,
+                self.descriptor_set.clone(),
+            )
+            .unwrap()
+            .dispatch([len as u32 / 256, 1, 1])
+            .unwrap();
+
+        let command_buffer = command_buffer_builder.build().unwrap();
+
+        before
+            .then_execute(self.compute_queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .boxed()
     }
 }
 
 mod cs {
-    vulkano::shader! {
+    use vulkano::padded::Padded;
+
+    use crate::data;
+
+    vulkano_shaders::shader! {
         ty: "compute",
-        path: "shaders/update_texture.comp"
+        path: "src/renderer/shaders/update_texture.comp"
+    }
+
+    impl From<data::Coordinate> for Coordinate {
+        fn from(value: data::Coordinate) -> Self {
+            fn convert((x, y): (i16, i16)) -> (u32, u32) {
+                // In Coordinate the origin is in the center of the image.
+                // We need to convert it to the top left corner.
+                // Coordinate: min: (-1500, -1000), max: (1499, 999)
+                // GpuCoordinate: min: (0, 0), max: (2999, 1999)
+                ((x + 1500) as u32, (y + 1000) as u32)
+            }
+            let (tag, data) = match value {
+                data::Coordinate::Simple { x, y } => {
+                    let (x, y) = convert((x, y));
+                    (0, [x, y, 0, 0])
+                }
+                data::Coordinate::Rectangle { x1, y1, x2, y2 } => {
+                    let (x1, y1) = convert((x1, y1));
+                    let (x2, y2) = convert((x2, y2));
+                    (1, [x1, y1, x2, y2])
+                }
+                data::Coordinate::Circle { x, y, radius } => {
+                    let (x, y) = convert((x, y));
+                    (2, [x, y, radius as u32, 0])
+                }
+            };
+            Coordinate {
+                tag: Padded(tag),
+                data,
+            }
+        }
+    }
+
+    impl From<data::PixelData> for PixelData {
+        fn from(pixel_data: crate::data::PixelData) -> Self {
+            PixelData {
+                miliseconds_since_first_pixel: Padded(pixel_data.miliseconds_since_first_pixel),
+                coordinate: pixel_data.coordinate.into(),
+                color: pixel_data.pixel_color.into(),
+            }
+        }
     }
 }

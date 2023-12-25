@@ -1,8 +1,7 @@
 use std::{mem::size_of, time::Instant};
 
-use crevice::std140::AsStd140;
 use log::{error, warn};
-use renderer::{data::Std140GpuPixelData, update_texture::WORKGROUP_SIZE, State};
+use renderer::{update_texture::WORKGROUP_SIZE, State};
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -10,7 +9,7 @@ use winit::{
     window::WindowBuilder,
 };
 
-use crate::{data::Coordinate, parse::GzippedBinPixelDataReader, renderer::data::GpuPixelData};
+use crate::{data::Coordinate, parse::GzippedBinPixelDataReader};
 
 pub mod data;
 pub mod parse;
@@ -98,8 +97,8 @@ pub async fn run() {
                     let elapsed_ms = render_start.elapsed().as_millis() as u32 * playback_speed;
 
                     for pixel_data in &mut reader {
-                        let pixel_data: GpuPixelData = pixel_data.unwrap().into();
-                        buffer.push(pixel_data.as_std140());
+                        let pixel_data = pixel_data.unwrap();
+                        buffer.push(pixel_data);
                         if pixel_data.miliseconds_since_first_pixel > elapsed_ms {
                             break;
                         }

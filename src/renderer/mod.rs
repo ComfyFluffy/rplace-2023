@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
+use bincode::de;
 use log::info;
 use vulkano::{
+    command_buffer::allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
+    descriptor_set::allocator::StandardDescriptorSetAllocator,
     format::Format,
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
     memory::allocator::AllocationCreateInfo,
@@ -41,6 +44,8 @@ pub struct State {
 pub struct App {
     context: VulkanoContext,
     windows: VulkanoWindows,
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 }
 
 impl App {
@@ -49,24 +54,23 @@ impl App {
         let windows = VulkanoWindows::default();
 
         let memory_allocator = context.memory_allocator();
+        let device = context.device();
 
-        let canvas_image = ImageView::new_default(
-            Image::new(
-                memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    extent: [3000, 2000, 1],
-                    format: Format::R8G8B8A8_UNORM,
-                    usage: ImageUsage::STORAGE,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-            )
-            .unwrap(),
-        )
-        .unwrap();
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
 
-        Self { context, windows }
+        Self {
+            context,
+            windows,
+            command_buffer_allocator,
+            descriptor_set_allocator,
+        }
     }
 
     pub fn run(&self, event_loop: EventLoop<()>) {
