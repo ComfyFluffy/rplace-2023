@@ -1,7 +1,7 @@
-use std::{mem::size_of, time::Instant};
+use std::time::Instant;
 
 use log::{error, warn};
-use renderer::{update_texture::WORKGROUP_SIZE, State};
+use renderer::{update_texture::UpdateTexturePipeline, State};
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -106,10 +106,9 @@ pub async fn run() {
 
                     let data = buffer
                         .drain(
-                            ..(buffer.len() / WORKGROUP_SIZE as usize * WORKGROUP_SIZE as usize)
-                                // 128 MiB (max buffer size)
-                                .min(128 * 1024 * 1024 / size_of::<Std140GpuPixelData>())
-                                .min(65535 * WORKGROUP_SIZE as usize),
+                            ..(buffer.len() / UpdateTexturePipeline::WORKGROUP_SIZE as usize
+                                * UpdateTexturePipeline::WORKGROUP_SIZE as usize)
+                                .min(UpdateTexturePipeline::MAX_PIXEL_UPDATES as usize),
                         )
                         .collect::<Vec<_>>();
 
