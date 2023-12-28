@@ -1,13 +1,4 @@
-use std::time::Instant;
-
-use log::{error, warn};
-use renderer::{update_texture::UpdateTexturePipeline, State};
-use winit::{
-    event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    keyboard::{Key, NamedKey},
-    window::WindowBuilder,
-};
+use renderer::App;
 
 use crate::{data::Coordinate, parse::GzippedBinPixelDataReader};
 
@@ -61,78 +52,8 @@ pub fn print_quad_circle() {
     }
 }
 
-pub async fn run() {
-    let event_loop = EventLoop::new().unwrap();
-    event_loop.set_control_flow(ControlFlow::Wait);
+pub fn run() {
+    let mut app = App::new();
 
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
-
-    let mut state = State::new(window).await;
-    let mut window_occluded = false;
-
-    let mut reader = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
-
-    let render_start = Instant::now();
-    let playback_speed = 10000;
-
-    let mut buffer = Vec::new();
-
-    event_loop
-        .run(move |event, elwt| match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            state: ElementState::Pressed,
-                            logical_key: Key::Named(NamedKey::Escape),
-                            ..
-                        },
-                    ..
-                } => elwt.exit(),
-                WindowEvent::Resized(physical_size) => {
-                    state.resize(physical_size);
-                }
-                WindowEvent::RedrawRequested => {
-                    let elapsed_ms = render_start.elapsed().as_millis() as u32 * playback_speed;
-
-                    for pixel_data in &mut reader {
-                        let pixel_data = pixel_data.unwrap();
-                        buffer.push(pixel_data);
-                        if pixel_data.miliseconds_since_first_pixel > elapsed_ms {
-                            break;
-                        }
-                    }
-
-                    let data = buffer
-                        .drain(
-                            ..(buffer.len() / UpdateTexturePipeline::WORKGROUP_SIZE as usize
-                                * UpdateTexturePipeline::WORKGROUP_SIZE as usize)
-                                .min(UpdateTexturePipeline::MAX_PIXEL_UPDATES as usize),
-                        )
-                        .collect::<Vec<_>>();
-
-                    match state.render(data.as_slice()) {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => {
-                            state.resize(state.size);
-                            warn!("Lost surface");
-                        }
-                        Err(wgpu::SurfaceError::OutOfMemory) => panic!("Out of memory"),
-                        Err(e) => error!("render error: {:?}", e),
-                    }
-                }
-                WindowEvent::Occluded(occluded) => {
-                    window_occluded = occluded;
-                }
-                _ => {}
-            },
-            Event::AboutToWait => {
-                if !window_occluded {
-                    state.window().request_redraw();
-                }
-            }
-            _ => {}
-        })
-        .unwrap();
+    app.run(GzippedBinPixelDataReader::new("pixels.bin").unwrap(), 10000);
 }

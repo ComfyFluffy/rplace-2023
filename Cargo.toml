@@ -14,7 +14,7 @@ snafu = "0.7.5"
 csv = "1.3.0"
 lazy_static = "1.4.0"
 rayon = "1.8.0"
-winit = "0.29.3"
+winit = "0.29.7"
 log = "0.4"
 # wgpu = { version = "0.18.0", features = ["vulkan-portability", "spirv"] }
 env_logger = "0.10"
@@ -22,9 +22,12 @@ pollster = "0.3.0"
 # bytemuck = { version = "1.14.0", features = ["derive"] }
 # cgmath = "0.18.0"
 # crevice = { version = "0.14.0", features = ["cgmath"] }
-vulkano = "0.34.1"
-vulkano-util = "0.34.1"
-vulkano-shaders = "0.34.0"
+# vulkano = "0.34.1"
+# vulkano-util = "0.34.1"
+# vulkano-shaders = "0.34.0"
+vulkano = { path = "../vulkano/vulkano" }
+vulkano-shaders = { path = "../vulkano/vulkano-shaders" }
+vulkano-util = { path = "../vulkano/vulkano-util" }
 [profile.release]
 debug = true
 

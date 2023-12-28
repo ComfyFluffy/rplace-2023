@@ -3,11 +3,11 @@ use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
-        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, ClearColorImageInfo,
-        CommandBufferUsage,
+        allocator::StandardCommandBufferAllocator, ClearColorImageInfo, CommandBufferUsage,
+        RecordingCommandBuffer,
     },
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
+        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
     },
     device::Queue,
     format::{ClearColorValue, Format},
@@ -20,20 +20,18 @@ use vulkano::{
     },
     sync::GpuFuture,
 };
-
-use super::App;
+use vulkano_util::context::VulkanoContext;
 
 pub struct UpdateTexturePipeline {
     compute_queue: Arc<Queue>,
     compute_pipeline: Arc<ComputePipeline>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
-    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-
+    // descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     pixel_updates_buffer: Subbuffer<[cs::PixelData]>,
-    atomic_buffer: Subbuffer<[i32]>,
+    // atomic_buffer: Subbuffer<[i32]>,
     canvas_image: Arc<ImageView>,
 
-    descriptor_set: Arc<PersistentDescriptorSet>,
+    descriptor_set: Arc<DescriptorSet>,
 
     should_clear_canvas: bool,
 }
@@ -42,9 +40,14 @@ impl UpdateTexturePipeline {
     pub const MAX_PIXEL_UPDATES: u64 = 1024 * 1024 * 2;
     pub const WORKGROUP_SIZE: u64 = 256;
 
-    pub fn new(app: &App, canvas_size: (u32, u32)) -> Self {
-        let allocator = app.context.memory_allocator();
-        let device = app.context.device();
+    pub fn new(
+        context: &VulkanoContext,
+        command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+        descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+        canvas_size: (u32, u32),
+    ) -> Self {
+        let allocator = context.memory_allocator();
+        let device = context.device();
         let pixel_updates_buffer = Buffer::new_slice(
             allocator.clone(),
             BufferCreateInfo {
@@ -130,9 +133,6 @@ impl UpdateTexturePipeline {
         )
         .unwrap();
 
-        let command_buffer_allocator = app.command_buffer_allocator.clone();
-        let descriptor_set_allocator = app.descriptor_set_allocator.clone();
-
         let descriptor_set = {
             let desc_layout = compute_pipeline
                 .layout()
@@ -140,8 +140,8 @@ impl UpdateTexturePipeline {
                 .get(0)
                 .unwrap()
                 .clone();
-            let descriptor_set = PersistentDescriptorSet::new(
-                &descriptor_set_allocator,
+            let descriptor_set = DescriptorSet::new(
+                descriptor_set_allocator.clone(),
                 desc_layout,
                 [
                     WriteDescriptorSet::buffer(0, pixel_updates_buffer.clone()),
@@ -156,18 +156,22 @@ impl UpdateTexturePipeline {
         };
 
         Self {
-            compute_queue: app.context.compute_queue().clone(),
+            compute_queue: context.compute_queue().clone(),
             compute_pipeline,
             command_buffer_allocator,
-            descriptor_set_allocator,
+            // descriptor_set_allocator,
             pixel_updates_buffer,
-            atomic_buffer,
+            // atomic_buffer,
             canvas_image,
 
             descriptor_set,
 
             should_clear_canvas: true,
         }
+    }
+
+    pub fn canvas_image(&self) -> &Arc<ImageView> {
+        &self.canvas_image
     }
 
     pub fn compute(
@@ -190,8 +194,8 @@ impl UpdateTexturePipeline {
             }
         }
 
-        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
-            &self.command_buffer_allocator,
+        let mut command_buffer_builder = RecordingCommandBuffer::primary(
+            self.command_buffer_allocator.clone(),
             self.compute_queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
@@ -220,7 +224,7 @@ impl UpdateTexturePipeline {
             .dispatch([len as u32 / 256, 1, 1])
             .unwrap();
 
-        let command_buffer = command_buffer_builder.build().unwrap();
+        let command_buffer = command_buffer_builder.end().unwrap();
 
         before
             .then_execute(self.compute_queue.clone(), command_buffer)
