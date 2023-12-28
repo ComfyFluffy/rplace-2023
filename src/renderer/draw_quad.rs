@@ -189,7 +189,9 @@ impl DrawQuadPipeline {
             let descriptor_set = DescriptorSet::new(
                 descriptor_set_allocator.clone(),
                 desc_layout,
-                [WriteDescriptorSet::sampler(0, sampler)],
+                [WriteDescriptorSet::image_view_sampler(
+                    0, src_image, sampler,
+                )],
                 [],
             )
             .unwrap();

@@ -38,7 +38,9 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let context = VulkanoContext::new(VulkanoConfig::default());
+        let mut config = VulkanoConfig::default();
+        config.device_features.dynamic_rendering = true;
+        let context = VulkanoContext::new(config);
         let windows = VulkanoWindows::default();
 
         let device = context.device();
