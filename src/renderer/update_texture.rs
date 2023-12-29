@@ -29,7 +29,7 @@ pub struct UpdateTexturePipeline {
     // descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     pixel_updates_buffer: Subbuffer<cs::PixelUpdates>,
     canvas_image: Arc<ImageView>,
-    atomic_buffer: Subbuffer<[i32]>,
+    atomic_buffer: Subbuffer<cs::LastIndex>,
 
     descriptor_set: Arc<DescriptorSet>,
 
@@ -59,7 +59,7 @@ impl UpdateTexturePipeline {
         )
         .unwrap();
 
-        let atomic_buffer = Buffer::from_iter(
+        let atomic_buffer = Buffer::new_unsized(
             allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::STORAGE_BUFFER,
@@ -70,7 +70,7 @@ impl UpdateTexturePipeline {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            (0..canvas_size.0 * canvas_size.1).map(|_| 0),
+            canvas_size.0 as u64 * canvas_size.1 as u64,
         )
         .unwrap();
 
@@ -189,8 +189,11 @@ impl UpdateTexturePipeline {
                 pixel_updates_buffer.pixel_updates[i] = Padded(pixel_data.into());
             }
         }
-
-        self.atomic_buffer.write().unwrap().fill(0);
+        self.atomic_buffer
+            .write()
+            .unwrap()
+            .last_index_for_coordinate
+            .fill(0);
 
         let mut command_buffer_builder = RecordingCommandBuffer::new(
             self.command_buffer_allocator.clone(),
