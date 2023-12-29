@@ -130,12 +130,7 @@ impl UpdateTexturePipeline {
         .unwrap();
 
         let descriptor_set = {
-            let desc_layout = compute_pipeline
-                .layout()
-                .set_layouts()
-                .get(0)
-                .unwrap()
-                .clone();
+            let desc_layout = compute_pipeline.layout().set_layouts()[0].clone();
             let descriptor_set = DescriptorSet::new(
                 app.descriptor_set_allocator.clone(),
                 desc_layout,
