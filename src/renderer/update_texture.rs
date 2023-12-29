@@ -3,8 +3,8 @@ use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
-        allocator::StandardCommandBufferAllocator, ClearColorImageInfo, CommandBufferUsage,
-        RecordingCommandBuffer,
+        allocator::StandardCommandBufferAllocator, ClearColorImageInfo, CommandBufferBeginInfo,
+        CommandBufferLevel, CommandBufferUsage, RecordingCommandBuffer,
     },
     descriptor_set::{DescriptorSet, WriteDescriptorSet},
     device::Queue,
@@ -189,10 +189,14 @@ impl UpdateTexturePipeline {
             }
         }
 
-        let mut command_buffer_builder = RecordingCommandBuffer::primary(
+        let mut command_buffer_builder = RecordingCommandBuffer::new(
             self.command_buffer_allocator.clone(),
             self.compute_queue.queue_family_index(),
-            CommandBufferUsage::OneTimeSubmit,
+            CommandBufferLevel::Primary,
+            CommandBufferBeginInfo {
+                usage: CommandBufferUsage::OneTimeSubmit,
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -206,18 +210,20 @@ impl UpdateTexturePipeline {
             self.should_clear_canvas = false;
         }
 
-        command_buffer_builder
-            .bind_pipeline_compute(self.compute_pipeline.clone())
-            .unwrap()
-            .bind_descriptor_sets(
-                PipelineBindPoint::Compute,
-                self.compute_pipeline.layout().clone(),
-                0,
-                self.descriptor_set.clone(),
-            )
-            .unwrap()
-            .dispatch([len as u32 / 256, 1, 1])
-            .unwrap();
+        unsafe {
+            command_buffer_builder
+                .bind_pipeline_compute(self.compute_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Compute,
+                    self.compute_pipeline.layout().clone(),
+                    0,
+                    self.descriptor_set.clone(),
+                )
+                .unwrap()
+                .dispatch([len as u32 / 256, 1, 1])
+                .unwrap();
+        }
 
         let command_buffer = command_buffer_builder.end().unwrap();
 

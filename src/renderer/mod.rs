@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 use log::warn;
 use vulkano::{
@@ -168,6 +172,7 @@ impl App {
                         }
                         WindowEvent::RedrawRequested => {
                             redraw(renderer);
+                            sleep(Duration::from_millis(16));
                         }
                         _ => {}
                     },
