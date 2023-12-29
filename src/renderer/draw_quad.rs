@@ -6,9 +6,7 @@ use vulkano::{
         allocator::StandardCommandBufferAllocator, CommandBufferUsage, RecordingCommandBuffer,
         RenderingAttachmentInfo, RenderingInfo,
     },
-    descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
-    },
+    descriptor_set::{DescriptorSet, WriteDescriptorSet},
     device::Queue,
     image::{
         sampler::{Filter, Sampler, SamplerCreateInfo},
@@ -32,7 +30,8 @@ use vulkano::{
     render_pass::{AttachmentLoadOp, AttachmentStoreOp},
     sync::GpuFuture,
 };
-use vulkano_util::context::VulkanoContext;
+
+use super::App;
 
 pub struct DrawQuadPipeline {
     gfx_queue: Arc<Queue>,
@@ -93,14 +92,13 @@ impl DrawQuadPipeline {
     }
 
     pub fn new(
-        context: &VulkanoContext,
-        command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
-        descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+        app: &App,
+        gfx_queue: Arc<Queue>,
         window_aspect_ratio: f32,
         src_image: Arc<ImageView>,
         rendering_info: PipelineRenderingCreateInfo,
     ) -> Self {
-        let gfx_queue = context.graphics_queue().clone();
+        let context = &app.context;
         let memory_allocator = context.memory_allocator().clone();
 
         let src_image_extent = src_image.image().extent();
@@ -187,7 +185,7 @@ impl DrawQuadPipeline {
         let descriptor_set = {
             let desc_layout = gfx_pipeline.layout().set_layouts().get(0).unwrap().clone();
             let descriptor_set = DescriptorSet::new(
-                descriptor_set_allocator.clone(),
+                app.descriptor_set_allocator.clone(),
                 desc_layout,
                 [WriteDescriptorSet::image_view_sampler(
                     0, src_image, sampler,
@@ -202,7 +200,7 @@ impl DrawQuadPipeline {
             gfx_pipeline,
             gfx_queue,
             vertex_buffer,
-            command_buffer_allocator,
+            command_buffer_allocator: app.command_buffer_allocator.clone(),
             // descriptor_set_allocator,
             descriptor_set,
         }

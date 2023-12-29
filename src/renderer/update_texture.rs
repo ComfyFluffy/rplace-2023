@@ -6,9 +6,7 @@ use vulkano::{
         allocator::StandardCommandBufferAllocator, ClearColorImageInfo, CommandBufferUsage,
         RecordingCommandBuffer,
     },
-    descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
-    },
+    descriptor_set::{DescriptorSet, WriteDescriptorSet},
     device::Queue,
     format::{ClearColorValue, Format},
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
@@ -20,7 +18,8 @@ use vulkano::{
     },
     sync::GpuFuture,
 };
-use vulkano_util::context::VulkanoContext;
+
+use super::App;
 
 pub struct UpdateTexturePipeline {
     compute_queue: Arc<Queue>,
@@ -40,12 +39,8 @@ impl UpdateTexturePipeline {
     pub const MAX_PIXEL_UPDATES: u64 = 1024 * 1024 * 2;
     pub const WORKGROUP_SIZE: u64 = 256;
 
-    pub fn new(
-        context: &VulkanoContext,
-        command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
-        descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-        canvas_size: (u32, u32),
-    ) -> Self {
+    pub fn new(app: &App, compute_queue: Arc<Queue>, canvas_size: (u32, u32)) -> Self {
+        let context = &app.context;
         let allocator = context.memory_allocator();
         let device = context.device();
         let pixel_updates_buffer = Buffer::new_slice(
@@ -141,7 +136,7 @@ impl UpdateTexturePipeline {
                 .unwrap()
                 .clone();
             let descriptor_set = DescriptorSet::new(
-                descriptor_set_allocator.clone(),
+                app.descriptor_set_allocator.clone(),
                 desc_layout,
                 [
                     WriteDescriptorSet::buffer(0, pixel_updates_buffer.clone()),
@@ -156,9 +151,9 @@ impl UpdateTexturePipeline {
         };
 
         Self {
-            compute_queue: context.compute_queue().clone(),
+            compute_queue,
             compute_pipeline,
-            command_buffer_allocator,
+            command_buffer_allocator: app.command_buffer_allocator.clone(),
             // descriptor_set_allocator,
             pixel_updates_buffer,
             // atomic_buffer,

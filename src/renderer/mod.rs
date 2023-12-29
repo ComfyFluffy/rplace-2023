@@ -40,6 +40,12 @@ impl App {
     pub fn new() -> Self {
         let mut config = VulkanoConfig::default();
         config.device_features.dynamic_rendering = true;
+
+        // let api_version = device.physical_device().api_version();
+        // info!("API Version: {:?}", api_version);
+        // if api_version < Version::V1_3 {
+        config.device_extensions.khr_dynamic_rendering = true;
+        // }
         let context = VulkanoContext::new(config);
         let windows = VulkanoWindows::default();
 
@@ -82,17 +88,14 @@ impl App {
             |_| {},
         );
 
-        let mut update_texture_pipeline = UpdateTexturePipeline::new(
-            &self.context,
-            self.command_buffer_allocator.clone(),
-            self.descriptor_set_allocator.clone(),
-            (1280, 720),
-        );
+        let queue = self.context.graphics_queue();
+
+        let mut update_texture_pipeline =
+            UpdateTexturePipeline::new(self, queue.clone(), (1280, 720));
 
         let draw_quad_pipeline = DrawQuadPipeline::new(
-            &self.context,
-            self.command_buffer_allocator.clone(),
-            self.descriptor_set_allocator.clone(),
+            self,
+            queue.clone(),
             1280.0 / 720.0,
             update_texture_pipeline.canvas_image().clone(),
             PipelineRenderingCreateInfo {
