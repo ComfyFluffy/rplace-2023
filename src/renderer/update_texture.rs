@@ -11,6 +11,7 @@ use vulkano::{
     format::{ClearColorValue, Format},
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
+    padded::Padded,
     pipeline::{
         compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
         ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
@@ -26,9 +27,9 @@ pub struct UpdateTexturePipeline {
     compute_pipeline: Arc<ComputePipeline>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     // descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    pixel_updates_buffer: Subbuffer<[cs::PixelData]>,
-    // atomic_buffer: Subbuffer<[i32]>,
+    pixel_updates_buffer: Subbuffer<cs::PixelUpdates>,
     canvas_image: Arc<ImageView>,
+    atomic_buffer: Subbuffer<[i32]>,
 
     descriptor_set: Arc<DescriptorSet>,
 
@@ -43,7 +44,7 @@ impl UpdateTexturePipeline {
         let context = &app.context;
         let allocator = context.memory_allocator();
         let device = context.device();
-        let pixel_updates_buffer = Buffer::new_slice(
+        let pixel_updates_buffer = Buffer::new_unsized(
             allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::STORAGE_BUFFER,
@@ -156,7 +157,7 @@ impl UpdateTexturePipeline {
             command_buffer_allocator: app.command_buffer_allocator.clone(),
             // descriptor_set_allocator,
             pixel_updates_buffer,
-            // atomic_buffer,
+            atomic_buffer,
             canvas_image,
 
             descriptor_set,
@@ -185,9 +186,11 @@ impl UpdateTexturePipeline {
         {
             let mut pixel_updates_buffer = self.pixel_updates_buffer.write().unwrap();
             for (i, pixel_data) in data.enumerate() {
-                pixel_updates_buffer[i] = pixel_data.clone().into();
+                pixel_updates_buffer.pixel_updates[i] = Padded(pixel_data.into());
             }
         }
+
+        self.atomic_buffer.write().unwrap().fill(0);
 
         let mut command_buffer_builder = RecordingCommandBuffer::new(
             self.command_buffer_allocator.clone(),
@@ -203,7 +206,7 @@ impl UpdateTexturePipeline {
         if self.should_clear_canvas {
             command_buffer_builder
                 .clear_color_image(ClearColorImageInfo {
-                    clear_value: ClearColorValue::Float([1.0, 1.0, 1.0, 1.0]),
+                    clear_value: ClearColorValue::Float([1.0; 4]),
                     ..ClearColorImageInfo::image(self.canvas_image.image().clone())
                 })
                 .unwrap();
@@ -253,7 +256,7 @@ mod cs {
                 // We need to convert it to the top left corner.
                 // Coordinate: min: (-1500, -1000), max: (1499, 999)
                 // GpuCoordinate: min: (0, 0), max: (2999, 1999)
-                ((x + 1500) as u32, (y + 1000) as u32)
+                ((x + 1500) as u32, (-y - 1 + 1000) as u32)
             }
             let (tag, data) = match value {
                 data::Coordinate::Simple { x, y } => {

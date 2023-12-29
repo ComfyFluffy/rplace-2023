@@ -11,10 +11,11 @@ struct PixelData {
   uvec3 color;
 };
 
-// Binding points in GLSL are set using layout(binding = index)
-layout(binding = 0) buffer PixelUpdates { PixelData pixel_updates[]; };
+layout(std430, binding = 0) buffer PixelUpdates { PixelData pixel_updates[]; };
 layout(binding = 1, rgba8) writeonly uniform image2D texture_out;
-layout(binding = 2) buffer LastIndex { int last_index_for_coordinate[]; };
+layout(std430, binding = 2) buffer LastIndex {
+  int last_index_for_coordinate[];
+};
 layout(binding = 3) uniform CanvasSize { uvec2 canvas_size; };
 
 void store_pixel_to_texture(int index, uvec2 coordinate, uvec3 color) {
@@ -38,10 +39,18 @@ void fillQuad(int index, uvec2 start, uvec2 end, uvec3 color) {
 
 // Helper function for Circle
 void fillCircle(int index, uvec2 center, uint radius, uvec3 color) {
-  for (uint x = center.x - radius; x < center.x + radius; ++x) {
-    for (uint y = center.y - radius; y < center.y + radius; ++y) {
-      if (pow(float(x - center.x), 2.0) + pow(float(y - center.y), 2.0) <
-          pow(float(radius), 2.0)) {
+  int minX = max(int(center.x) - int(radius), 0);
+  int minY = max(int(center.y) - int(radius), 0);
+  int maxX = min(int(center.x) + int(radius), int(canvas_size.x) - 1);
+  int maxY = min(int(center.y) + int(radius), int(canvas_size.y) - 1);
+
+  for (int x = minX; x <= maxX; x++) {
+    for (int y = minY; y <= maxY; y++) {
+      int dx = x - int(center.x);
+      int dy = y - int(center.y);
+
+      // Check if the pixel is within the circle's radius
+      if (dx * dx + dy * dy <= int(radius) * int(radius)) {
         store_pixel_to_texture(index, uvec2(x, y), color);
       }
     }

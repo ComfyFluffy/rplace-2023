@@ -32,6 +32,69 @@ pub fn get_max_min_coord() {
     println!("min: {:?}, max: {:?}", min, max);
 }
 
+pub fn find_never_updated_pixels() {
+    let iter = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
+    let mut pixels = vec![false; 3000 * 2000];
+
+    for (index, pixel_data) in iter.enumerate() {
+        if index % 100000 == 0 {
+            println!("{}", index);
+        }
+        let pixel_data = pixel_data.unwrap();
+        fn convert((x, y): (i16, i16)) -> Option<(usize, usize)> {
+            let x = x as i32 + 1500;
+            let y = -y as i32 - 1 + 1000;
+            if x >= 0 && x < 3000 && y >= 0 && y < 2000 {
+                Some((x as usize, y as usize))
+            } else {
+                None
+            }
+        }
+        match pixel_data.coordinate {
+            Coordinate::Simple { x, y } => {
+                if let Some((x, y)) = convert((x, y)) {
+                    pixels[y * 3000 + x] = true;
+                }
+            }
+            Coordinate::Circle { x, y, radius } => {
+                if let Some((x, y)) = convert((x, y)) {
+                    let (min_i, max_i) = (
+                        x.saturating_sub(radius as usize),
+                        (x + radius as usize).min(2999),
+                    );
+                    let (min_j, max_j) = (
+                        y.saturating_sub(radius as usize),
+                        (y + radius as usize).min(1999),
+                    );
+
+                    for i in min_i..=max_i {
+                        for j in min_j..=max_j {
+                            if (i as i32 - x as i32).pow(2) + (j as i32 - y as i32).pow(2)
+                                < radius.pow(2) as i32
+                            {
+                                pixels[j * 3000 + i] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            Coordinate::Rectangle { x1, y1, x2, y2 } => {
+                if let (Some((x1, y1)), Some((x2, y2))) = (convert((x1, y1)), convert((x2, y2))) {
+                    for i in x1..x2 {
+                        for j in y1..y2 {
+                            pixels[j * 3000 + i] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let never_updated = pixels.iter().filter(|&&x| !x).count();
+
+    println!("Never updated: {}", never_updated);
+}
+
 pub fn print_quad_circle() {
     let reader = GzippedBinPixelDataReader::new("pixels.bin").unwrap();
     for pixel_data in reader {

@@ -1,6 +1,6 @@
 # rplace-2023
 
-r/place realtime player for 2023.
+r/place realtime player for 2023, using [Vulkano](https://github.com/vulkano-rs/vulkano).
 
 Inspired by [Applying 5 million pixel updates per second with Rust & wgpu](https://maxisom.me/posts/applying-5-million-pixel-updates-per-second).
 

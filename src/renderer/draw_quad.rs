@@ -39,6 +39,7 @@ pub struct DrawQuadPipeline {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     // descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     vertex_buffer: Subbuffer<[TexturedVertex]>,
+    src_image: Arc<ImageView>,
 
     descriptor_set: Arc<DescriptorSet>,
 }
@@ -102,8 +103,8 @@ impl DrawQuadPipeline {
         let memory_allocator = context.memory_allocator().clone();
 
         let src_image_extent = src_image.image().extent();
-        let texture_aspect_ratio = src_image_extent[0] as f32 / src_image_extent[1] as f32;
-        let vertices = Self::fit_quad(window_aspect_ratio, texture_aspect_ratio);
+        let src_image_aspect_ratio = src_image_extent[0] as f32 / src_image_extent[1] as f32;
+        let vertices = Self::fit_quad(window_aspect_ratio, src_image_aspect_ratio);
 
         let vertex_buffer = {
             Buffer::from_iter(
@@ -188,7 +189,9 @@ impl DrawQuadPipeline {
                 app.descriptor_set_allocator.clone(),
                 desc_layout,
                 [WriteDescriptorSet::image_view_sampler(
-                    0, src_image, sampler,
+                    0,
+                    src_image.clone(),
+                    sampler,
                 )],
                 [],
             )
@@ -197,13 +200,24 @@ impl DrawQuadPipeline {
         };
 
         Self {
+            src_image,
             gfx_pipeline,
             gfx_queue,
             vertex_buffer,
             command_buffer_allocator: app.command_buffer_allocator.clone(),
-            // descriptor_set_allocator,
             descriptor_set,
         }
+    }
+
+    pub fn update_window_aspect_ratio(&mut self, window_aspect_ratio: f32) {
+        let src_image_extent = self.src_image.image().extent();
+        let src_image_aspect_ratio = src_image_extent[0] as f32 / src_image_extent[1] as f32;
+        let vertices = Self::fit_quad(window_aspect_ratio, src_image_aspect_ratio);
+
+        self.vertex_buffer
+            .write()
+            .unwrap()
+            .copy_from_slice(&vertices);
     }
 
     pub fn draw(

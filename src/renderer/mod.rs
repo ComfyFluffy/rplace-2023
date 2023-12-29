@@ -1,10 +1,6 @@
-use std::{
-    sync::Arc,
-    thread::sleep,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Instant};
 
-use log::warn;
+use log::{debug, warn};
 use vulkano::{
     command_buffer::allocator::StandardCommandBufferAllocator,
     descriptor_set::allocator::StandardDescriptorSetAllocator,
@@ -34,10 +30,6 @@ pub struct App {
     windows: VulkanoWindows,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    // update_texture_pipeline: UpdateTexturePipeline,
-    // draw_quad_pipeline: DrawQuadPipeline,
-    // data_reader: GzippedBinPixelDataReader,
-    // playback_speed: u32,
 }
 
 impl App {
@@ -95,9 +87,9 @@ impl App {
         let queue = self.context.graphics_queue();
 
         let mut update_texture_pipeline =
-            UpdateTexturePipeline::new(self, queue.clone(), (1280, 720));
+            UpdateTexturePipeline::new(self, queue.clone(), (3000, 2000));
 
-        let draw_quad_pipeline = DrawQuadPipeline::new(
+        let mut draw_quad_pipeline = DrawQuadPipeline::new(
             self,
             queue.clone(),
             1280.0 / 720.0,
@@ -117,8 +109,10 @@ impl App {
 
         let mut buffer = Vec::new();
 
-        let mut redraw = |renderer: &mut VulkanoWindowRenderer| {
+        let mut redraw = |renderer: &mut VulkanoWindowRenderer,
+                          draw_quad_pipeline: &DrawQuadPipeline| {
             let elapsed_ms = render_start.elapsed().as_millis() as u32 * playback_speed;
+            debug!("Render started at {}ms", elapsed_ms);
 
             for pixel_data in &mut data_reader {
                 let pixel_data = pixel_data.unwrap();
@@ -135,6 +129,8 @@ impl App {
                         .min(UpdateTexturePipeline::MAX_PIXEL_UPDATES as usize),
                 )
                 .collect::<Vec<_>>();
+
+            debug!("Updating {} pixels", data.len());
 
             let before_pipeline = match renderer.acquire() {
                 Ok(before) => before,
@@ -167,12 +163,16 @@ impl App {
                                 },
                             ..
                         } => elwt.exit(),
-                        WindowEvent::Resized(..) | WindowEvent::ScaleFactorChanged { .. } => {
+                        WindowEvent::Resized(size) => {
+                            draw_quad_pipeline
+                                .update_window_aspect_ratio(size.width as f32 / size.height as f32);
+                            renderer.resize();
+                        }
+                        WindowEvent::ScaleFactorChanged { .. } => {
                             renderer.resize();
                         }
                         WindowEvent::RedrawRequested => {
-                            redraw(renderer);
-                            sleep(Duration::from_millis(16));
+                            redraw(renderer, &draw_quad_pipeline);
                         }
                         _ => {}
                     },
