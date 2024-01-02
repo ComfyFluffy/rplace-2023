@@ -24,7 +24,6 @@ use self::{draw_quad::DrawQuadPipeline, update_texture::UpdateTexturePipeline};
 mod draw_quad;
 pub mod update_texture;
 
-// Transform State to Vulkano App.
 pub struct App {
     context: VulkanoContext,
     windows: VulkanoWindows,
