@@ -190,7 +190,7 @@ impl UpdateTexturePipeline {
             .last_index_for_coordinate
             .fill(0);
 
-        let mut command_buffer_builder = RecordingCommandBuffer::new(
+        let mut builder = RecordingCommandBuffer::new(
             self.command_buffer_allocator.clone(),
             self.compute_queue.queue_family_index(),
             CommandBufferLevel::Primary,
@@ -202,7 +202,7 @@ impl UpdateTexturePipeline {
         .unwrap();
 
         if self.should_clear_canvas {
-            command_buffer_builder
+            builder
                 .clear_color_image(ClearColorImageInfo {
                     clear_value: ClearColorValue::Float([1.0; 4]),
                     ..ClearColorImageInfo::image(self.canvas_image.image().clone())
@@ -211,22 +211,22 @@ impl UpdateTexturePipeline {
             self.should_clear_canvas = false;
         }
 
+        builder
+            .bind_pipeline_compute(self.compute_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                self.compute_pipeline.layout().clone(),
+                0,
+                self.descriptor_set.clone(),
+            )
+            .unwrap();
+
         unsafe {
-            command_buffer_builder
-                .bind_pipeline_compute(self.compute_pipeline.clone())
-                .unwrap()
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Compute,
-                    self.compute_pipeline.layout().clone(),
-                    0,
-                    self.descriptor_set.clone(),
-                )
-                .unwrap()
-                .dispatch([len as u32 / 256, 1, 1])
-                .unwrap();
+            builder.dispatch([len as u32 / 256, 1, 1]).unwrap();
         }
 
-        let command_buffer = command_buffer_builder.end().unwrap();
+        let command_buffer = builder.end().unwrap();
 
         before
             .then_execute(self.compute_queue.clone(), command_buffer)

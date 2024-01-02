@@ -244,39 +244,41 @@ impl DrawQuadPipeline {
             }
         };
 
+        builder
+            .begin_rendering(RenderingInfo {
+                color_attachments: vec![Some(RenderingAttachmentInfo {
+                    load_op: AttachmentLoadOp::Clear,
+                    store_op: AttachmentStoreOp::Store,
+                    clear_value: Some([0.1, 0.1, 0.1, 1.0].into()),
+                    ..RenderingAttachmentInfo::image_view(dst_image)
+                })],
+                ..Default::default()
+            })
+            .unwrap()
+            .set_viewport(0, [viewport].into_iter().collect())
+            .unwrap()
+            .bind_pipeline_graphics(self.gfx_pipeline.clone())
+            .unwrap()
+            .bind_vertex_buffers(0, self.vertex_buffer.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                self.gfx_pipeline.bind_point(),
+                self.gfx_pipeline.layout().clone(),
+                0,
+                self.descriptor_set.clone(),
+            )
+            .unwrap();
+
         unsafe {
-            builder
-                .begin_rendering(RenderingInfo {
-                    color_attachments: vec![Some(RenderingAttachmentInfo {
-                        load_op: AttachmentLoadOp::Clear,
-                        store_op: AttachmentStoreOp::Store,
-                        clear_value: Some([0.1, 0.1, 0.1, 1.0].into()),
-                        ..RenderingAttachmentInfo::image_view(dst_image)
-                    })],
-                    ..Default::default()
-                })
-                .unwrap()
-                .set_viewport(0, [viewport].into_iter().collect())
-                .unwrap()
-                .bind_pipeline_graphics(self.gfx_pipeline.clone())
-                .unwrap()
-                .bind_vertex_buffers(0, self.vertex_buffer.clone())
-                .unwrap()
-                .bind_descriptor_sets(
-                    self.gfx_pipeline.bind_point(),
-                    self.gfx_pipeline.layout().clone(),
-                    0,
-                    self.descriptor_set.clone(),
-                )
-                .unwrap()
-                .draw(4, 1, 0, 0)
-                .unwrap()
-                .end_rendering()
-                .unwrap();
+            builder.draw(4, 1, 0, 0).unwrap();
         }
 
+        builder.end_rendering().unwrap();
+
+        let command_buffer = builder.end().unwrap();
+
         before
-            .then_execute(self.gfx_queue.clone(), builder.end().unwrap())
+            .then_execute(self.gfx_queue.clone(), command_buffer)
             .unwrap()
             .boxed()
     }
