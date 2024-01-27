@@ -12,6 +12,6 @@ Compute shader is used to update the canvas, resulting in 10000x playback speed 
 
 ## Todos
 
-- [ ] Color space correction.
+- [x] Color space correction.
 - [ ] Trialing data should be processed.
 - [ ] Player control.
