@@ -62,12 +62,11 @@ impl UpdateTexturePipeline {
         let atomic_buffer = Buffer::new_unsized(
             allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
                 ..Default::default()
             },
             canvas_size.0 as u64 * canvas_size.1 as u64,
@@ -184,11 +183,6 @@ impl UpdateTexturePipeline {
                 pixel_updates_buffer.pixel_updates[i] = Padded(pixel_data.into());
             }
         }
-        self.atomic_buffer
-            .write()
-            .unwrap()
-            .last_index_for_coordinate
-            .fill(0);
 
         let mut builder = RecordingCommandBuffer::new(
             self.command_buffer_allocator.clone(),
@@ -200,6 +194,10 @@ impl UpdateTexturePipeline {
             },
         )
         .unwrap();
+
+        builder
+            .fill_buffer(self.atomic_buffer.clone().reinterpret(), 0)
+            .unwrap();
 
         if self.should_clear_canvas {
             builder
