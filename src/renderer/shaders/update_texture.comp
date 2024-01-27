@@ -22,6 +22,8 @@ void store_pixel_to_texture(int index, uvec2 coordinate, uvec3 color) {
   int idx = atomicMax(
       last_index_for_coordinate[coordinate.x + coordinate.y * canvas_size.x],
       index);
+  // It seems this could cause a race condition, but it's probably not a
+  // problem.
   if (idx > index) {
     return; // This pixel has already been updated by a newer pixel.
   }
